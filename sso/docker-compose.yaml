@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  sso:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "${GRPC_PORT}:${GRPC_PORT}"
+    restart: unless-stopped
+    networks:
+      - sso-network
+    command: ["./sso"]
+
+networks:
+  sso-network:
+    driver: bridge
