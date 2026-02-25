@@ -1,17 +1,14 @@
 package authgrpc
 
-import "context"
+import (
+	"context"
+	"sso/internal/domain"
+	"time"
+)
 
 type auth interface {
-	Login(
-		ctx context.Context,
-		email string,
-		password string,
-		appID int,
-	) (token string, err error)
-	RegisterNewUser(
-		ctx context.Context,
-		username string,
-		password string,
-	) (userID int64, err error)
+	Login(ctx context.Context, username, password string, appID int) (*domain.UserClaim, string, time.Time, error)
+	RegisterNewUser(ctx context.Context, username, password string, role domain.UserRole, appID int) (userID int64, err error)
+	GetUsers(ctx context.Context) ([]*domain.User, error)
+	UpdateUserRole(ctx context.Context, userID int64, role domain.UserRole) error
 }

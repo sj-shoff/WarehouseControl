@@ -20,17 +20,14 @@ type Config struct {
 		MaxIdleConns    int           `env:"POSTGRES_MAX_IDLE_CONNS"`
 		ConnMaxLifetime time.Duration `env:"POSTGRES_CONN_MAX_LIFETIME"`
 	}
-
 	GRPC struct {
 		Port    string        `env:"GRPC_PORT" validate:"required"`
 		Timeout time.Duration `env:"GRPC_TIMEOUT" env-default:"10s"`
 	}
-
 	JWT struct {
 		Secret   string        `env:"JWT_SECRET" validate:"required"`
 		TokenTTL time.Duration `env:"JWT_TOKEN_TTL" env-default:"24h"`
 	}
-
 	Retries struct {
 		Attempts int     `env:"RETRIES_ATTEMPTS" validate:"required"`
 		DelayMs  int     `env:"RETRIES_DELAY_MS" validate:"required"`
@@ -40,13 +37,11 @@ type Config struct {
 
 func MustLoad() (*Config, error) {
 	var cfg Config
-	err := cleanenv.ReadEnv(&cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read environment variables: %w", err)
+	if err := cleanenv.ReadEnv(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to read env: %w", err)
 	}
-	validate := validator.New()
-	if err := validate.Struct(&cfg); err != nil {
-		return nil, fmt.Errorf("config validation failed: %w", err)
+	if err := validator.New().Struct(&cfg); err != nil {
+		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 	return &cfg, nil
 }

@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package sso;
+
+option go_package = "sso/gen/sso";
+
+service Auth {
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc Register(RegisterRequest) returns (RegisterResponse) {}
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse) {}
+  rpc UpdateUserRole(UpdateRoleRequest) returns (UpdateRoleResponse) {}
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+  int32  app_id   = 3;
+}
+
+message LoginResponse {
+  string token = 1;
+}
+
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  string role     = 3;
+  int32  app_id   = 4;
+}
+
+message RegisterResponse {
+  int64 user_id = 1;
+}
+
+message GetUsersRequest {}
+
+message User {
+  int64  id       = 1;
+  string username = 2;
+  string role     = 3;
+}
+
+message GetUsersResponse {
+  repeated User users = 1;
+}
+
+message UpdateRoleRequest {
+  int64  user_id  = 1;
+  string new_role = 2;
+}
+
+message UpdateRoleResponse {}

@@ -14,38 +14,47 @@ import (
 )
 
 type AuthUsecase struct {
-	userRepo  userRepository
-	logger    *zlog.Zerolog
-	jwtSecret string
-	tokenTTL  time.Duration
+	userRepo   userRepository
+	appUsecase appUsecase
+	logger     *zlog.Zerolog
+	jwtSecret  string
+	tokenTTL   time.Duration
 }
 
 func NewAuthUsecase(
 	userRepo userRepository,
+	appUsecase appUsecase,
 	logger *zlog.Zerolog,
 	jwtSecret string,
 	tokenTTL time.Duration,
 ) *AuthUsecase {
 	return &AuthUsecase{
-		userRepo:  userRepo,
-		logger:    logger,
-		jwtSecret: jwtSecret,
-		tokenTTL:  tokenTTL,
+		userRepo:   userRepo,
+		appUsecase: appUsecase,
+		logger:     logger,
+		jwtSecret:  jwtSecret,
+		tokenTTL:   tokenTTL,
 	}
 }
 
-func (s *AuthUsecase) Login(ctx context.Context, username, password string) (*domain.UserClaim, string, time.Time, error) {
+func (s *AuthUsecase) Login(ctx context.Context, username, password string, appID int) (*domain.UserClaim, string, time.Time, error) {
 	const op = "auth_usecase.Login"
 
-	if username == "" || password == "" {
+	if username == "" || password == "" || appID <= 0 {
 		return nil, "", time.Time{}, customErr.ErrInvalidInput
 	}
 
-	s.logger.Info().Str("username", username).Msg("Login attempt")
+	s.logger.Info().Str("username", username).Int("app_id", appID).Msg("login attempt")
+
+	// проверка приложения
+	if _, err := s.appUsecase.GetByID(ctx, appID); err != nil {
+		s.logger.Warn().Int("app_id", appID).Msg("app not found")
+		return nil, "", time.Time{}, customErr.ErrInvalidInput
+	}
 
 	user, err := s.userRepo.GetUserByUsername(ctx, username)
 	if err != nil {
-		s.logger.Warn().Err(err).Str("username", username).Msg("User not found")
+		s.logger.Warn().Err(err).Str("username", username).Msg("user not found")
 		if errors.Is(err, customErr.ErrUserNotFound) {
 			return nil, "", time.Time{}, customErr.ErrInvalidCredentials
 		}
@@ -53,121 +62,82 @@ func (s *AuthUsecase) Login(ctx context.Context, username, password string) (*do
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		s.logger.Warn().Str("username", username).Msg("Invalid password")
+		s.logger.Warn().Str("username", username).Msg("invalid password")
 		return nil, "", time.Time{}, customErr.ErrInvalidCredentials
 	}
 
 	expiresAt := time.Now().Add(s.tokenTTL)
 	token, err := jwt.NewToken(user, s.jwtSecret, s.tokenTTL)
 	if err != nil {
-		s.logger.Error().Err(err).Msg("Failed to generate token")
+		s.logger.Error().Err(err).Msg("failed to generate token")
 		return nil, "", time.Time{}, fmt.Errorf("%s: %w", op, customErr.ErrInternal)
 	}
 
-	claim := &domain.UserClaim{
+	s.logger.Info().Str("username", username).Str("role", string(user.Role)).Msg("login successful")
+	return &domain.UserClaim{
 		UserID:   user.ID,
 		Username: user.Username,
 		Role:     user.Role,
-	}
-
-	s.logger.Info().Str("username", username).Str("role", string(user.Role)).Msg("Login successful")
-	return claim, token, expiresAt, nil
+	}, token, expiresAt, nil
 }
 
-func (s *AuthUsecase) ValidateToken(ctx context.Context, token string) (*domain.UserClaim, error) {
-	claim, err := jwt.ValidateToken(token, s.jwtSecret)
-	if err != nil {
-		return nil, customErr.ErrTokenInvalid
-	}
-	return claim, nil
-}
+func (s *AuthUsecase) RegisterNewUser(ctx context.Context, username, password string, role domain.UserRole, appID int) (int64, error) {
+	const op = "auth_usecase.RegisterNewUser"
 
-func (s *AuthUsecase) CreateUser(ctx context.Context, req *domain.CreateUserRequest) (int64, error) {
-	const op = "auth_usecase.CreateUser"
-
-	if req.Username == "" || req.Password == "" || !domain.IsValidRole(string(req.Role)) {
+	if username == "" || password == "" || appID <= 0 {
 		return 0, customErr.ErrInvalidInput
 	}
 
-	s.logger.Info().Str("username", req.Username).Str("role", string(req.Role)).Msg("Create user attempt")
+	if _, err := s.appUsecase.GetByID(ctx, appID); err != nil {
+		return 0, customErr.ErrInvalidInput
+	}
 
-	passHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if !domain.IsValidRole(string(role)) {
+		role = domain.RoleViewer
+	}
+
+	s.logger.Info().Str("username", username).Str("role", string(role)).Int("app_id", appID).Msg("register attempt")
+
+	passHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		s.logger.Error().Err(err).Msg("Failed to hash password")
+		s.logger.Error().Err(err).Msg("failed to hash password")
 		return 0, fmt.Errorf("%s: %w", op, customErr.ErrInternal)
 	}
 
 	user := &domain.User{
-		Username:     req.Username,
+		Username:     username,
 		PasswordHash: string(passHash),
-		Role:         req.Role,
+		Role:         role,
 	}
 
 	id, err := s.userRepo.CreateUser(ctx, user)
 	if err != nil {
-		s.logger.Error().Err(err).Str("username", req.Username).Msg("Failed to create user")
+		s.logger.Error().Err(err).Str("username", username).Msg("failed to create user")
 		if errors.Is(err, customErr.ErrUserExists) {
 			return 0, customErr.ErrUserExists
 		}
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
 
-	s.logger.Info().Int64("user_id", id).Str("username", req.Username).Msg("User created")
+	s.logger.Info().Int64("user_id", id).Str("username", username).Msg("user registered")
 	return id, nil
 }
 
-func (s *AuthUsecase) GetUserByID(ctx context.Context, id int64) (*domain.User, error) {
-	if id <= 0 {
-		return nil, customErr.ErrInvalidInput
-	}
-	return s.userRepo.GetUserByID(ctx, id)
-}
-
 func (s *AuthUsecase) GetUsers(ctx context.Context) ([]*domain.User, error) {
-	s.logger.Info().Msg("Getting users")
+	const op = "auth_usecase.GetUsers"
+	s.logger.Info().Msg("getting users")
 	users, err := s.userRepo.GetUsers(ctx)
 	if err != nil {
-		s.logger.Error().Err(err).Msg("Failed to get users")
-		return nil, fmt.Errorf("auth_usecase.GetUsers: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
-	s.logger.Info().Int("count", len(users)).Msg("Users retrieved")
+	s.logger.Info().Int("count", len(users)).Msg("users retrieved")
 	return users, nil
 }
 
-func (s *AuthUsecase) UpdateUser(ctx context.Context, req *domain.UpdateUserRequest) error {
-	const op = "auth_usecase.UpdateUser"
-
-	if req.ID <= 0 || req.Username == "" || !domain.IsValidRole(string(req.Role)) {
+func (s *AuthUsecase) UpdateUserRole(ctx context.Context, userID int64, role domain.UserRole) error {
+	const op = "auth_usecase.UpdateUserRole"
+	if userID <= 0 || !domain.IsValidRole(string(role)) {
 		return customErr.ErrInvalidInput
 	}
-
-	s.logger.Info().Int64("user_id", req.ID).Str("username", req.Username).Msg("Update user attempt")
-
-	err := s.userRepo.UpdateUser(ctx, req.ID, req.Username, req.Role)
-	if err != nil {
-		s.logger.Error().Err(err).Int64("user_id", req.ID).Msg("Failed to update user")
-		if errors.Is(err, customErr.ErrUserNotFound) {
-			return customErr.ErrUserNotFound
-		}
-		return fmt.Errorf("%s: %w", op, err)
-	}
-
-	s.logger.Info().Int64("user_id", req.ID).Msg("User updated")
-	return nil
-}
-
-func (s *AuthUsecase) DeleteUser(ctx context.Context, id int64) error {
-	if id <= 0 {
-		return customErr.ErrInvalidInput
-	}
-	s.logger.Info().Int64("user_id", id).Msg("Deleting user")
-	return s.userRepo.DeleteUser(ctx, id)
-}
-
-func (s *AuthUsecase) UpdateUserRole(ctx context.Context, id int64, role domain.UserRole) error {
-	if id <= 0 || !domain.IsValidRole(string(role)) {
-		return customErr.ErrInvalidInput
-	}
-	s.logger.Info().Int64("user_id", id).Str("role", string(role)).Msg("Updating user role")
-	return s.userRepo.UpdateUserRole(ctx, id, role)
+	return s.userRepo.UpdateUserRole(ctx, userID, role)
 }

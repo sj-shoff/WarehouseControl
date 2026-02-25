@@ -34,9 +34,3 @@ type CreateUserRequest struct {
 	Password string
 	Role     UserRole
 }
-
-type UpdateUserRequest struct {
-	ID       int64
-	Username string
-	Role     UserRole
-}

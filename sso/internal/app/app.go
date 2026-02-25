@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"os/signal"
 	"sso/internal/config"
-
-	grpcService "sso/internal/grpc/auth"
-	userRepository "sso/internal/repository/auth/postgres"
+	authgrpc "sso/internal/grpc/auth"
+	appsRepository "sso/internal/repository/apps/postgres"
+	userRepository "sso/internal/repository/users/postgres"
+	appsUsecase "sso/internal/usecase/apps"
 	authUsecase "sso/internal/usecase/auth"
 
 	"github.com/wb-go/wbf/dbpg"
@@ -19,46 +22,58 @@ type App struct {
 	cfg    *config.Config
 	logger *zlog.Zerolog
 	server *grpc.Server
+	db     *dbpg.DB
 }
 
 func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
 	retries := cfg.DefaultRetryStrategy()
-	dbOpts := &dbpg.Options{
+
+	db, err := dbpg.New(cfg.DBDSN(), nil, &dbpg.Options{
 		MaxOpenConns:    cfg.DB.MaxOpenConns,
 		MaxIdleConns:    cfg.DB.MaxIdleConns,
 		ConnMaxLifetime: cfg.DB.ConnMaxLifetime,
-	}
-	db, err := dbpg.New(cfg.DBDSN(), []string{}, dbOpts)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("db connect: %w", err)
 	}
 
 	userRepo := userRepository.NewPostgresRepository(db, retries)
-	authUc := authUsecase.NewAuthUsecase(userRepo, logger, cfg.JWT.Secret, cfg.JWT.TokenTTL)
+	appsRepo := appsRepository.NewPostgresRepository(db, retries)
+
+	appsUc := appsUsecase.NewAppUsecase(appsRepo, logger)
+	authUc := authUsecase.NewAuthUsecase(userRepo, appsUc, logger, cfg.JWT.Secret, cfg.JWT.TokenTTL)
 
 	grpcServer := grpc.NewServer()
-	grpcService.Register(grpcServer, authUc)
+	authgrpc.Register(grpcServer, authUc)
 
 	return &App{
 		cfg:    cfg,
 		logger: logger,
 		server: grpcServer,
+		db:     db,
 	}, nil
 }
 
-func (a *App) Run(ctx context.Context, port string) error {
-	lis, err := net.Listen("tcp", port)
+func (a *App) Run() error {
+	lis, err := net.Listen("tcp", ":"+a.cfg.GRPC.Port)
 	if err != nil {
-		return fmt.Errorf("failed to listen: %w", err)
+		return fmt.Errorf("listen: %w", err)
 	}
 
-	a.logger.Info().Str("port", port).Msg("gRPC server starting")
+	a.logger.Info().Str("port", a.cfg.GRPC.Port).Msg("gRPC SSO started")
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 
 	go func() {
-		<-ctx.Done()
-		a.server.GracefulStop()
-		a.db.
+		if err := a.server.Serve(lis); err != nil {
+			a.logger.Error().Err(err).Msg("gRPC serve failed")
+		}
 	}()
 
-	return a.server.Serve(lis)
+	<-ctx.Done()
+	a.logger.Info().Msg("Graceful shutdown...")
+	a.server.GracefulStop()
+	a.db.Master.Close()
+	return nil
 }

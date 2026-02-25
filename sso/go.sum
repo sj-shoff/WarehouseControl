@@ -49,8 +49,6 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH
 github.com/rs/xid v1.5.0/go.mod h1:trrq9SKmegXys3aeAKXMUTdJsYXVwGY3RLcfgqegfbg=
 github.com/rs/zerolog v1.30.0 h1:SymVODrcRsaRaSInD9yQtKbtWqwsfoPcRff/oRXLj4c=
 github.com/rs/zerolog v1.30.0/go.mod h1:/tk+P47gFdPXq4QYjvCmT5/Gsug2nagsFWBWhAiSi1w=
-github.com/sj-shoff/protos v0.0.2 h1:UBYO/L9Gr6ib8cV41tOa/ydFZl5VFmNTXO9Z/gL1hGg=
-github.com/sj-shoff/protos v0.0.2/go.mod h1:FbFv/ArZRaNx1b2ZieB3jjP8gt9ORq2NjF4ZxU/H5Us=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/wb-go/wbf v0.0.13 h1:Df/RhheqjZfHA6lh8xSlON+k4F8sNDljkZCO81PQP5I=
