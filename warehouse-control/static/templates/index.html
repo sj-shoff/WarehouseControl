@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warehouse Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  <div class="max-w-7xl mx-auto p-6">
+    <!-- Login Screen -->
+    <div id="login" class="max-w-md mx-auto mt-32">
+      <div class="bg-white rounded-3xl shadow-2xl p-10">
+        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Warehouse Control</h1>
+        <input id="username" type="text" placeholder="Логин" class="w-full p-4 border border-gray-300 rounded-2xl mb-4 focus:outline-none focus:border-blue-500">
+        <input id="password" type="password" placeholder="Пароль" class="w-full p-4 border border-gray-300 rounded-2xl mb-6 focus:outline-none focus:border-blue-500">
+        <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-2xl transition">
+          Войти
+        </button>
+      </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" class="hidden">
+      <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold">Склад</h1>
+        <div class="flex items-center gap-6">
+          <span id="current-user" class="font-medium text-gray-700"></span>
+          <button onclick="logout()" class="text-red-600 hover:text-red-700 flex items-center gap-2">
+            <i class="fas fa-sign-out-alt"></i> Выход
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b mb-6">
+        <button onclick="switchTab(0)" class="tab active px-8 py-4 font-medium" data-tab="0">Товары</button>
+        <button onclick="switchTab(1)" class="tab px-8 py-4 font-medium" data-tab="1">История</button>
+      </div>
+
+      <!-- Items Tab -->
+      <div id="tab-0">
+        <button onclick="showAddModal()" class="mb-6 bg-green-600 text-white px-6 py-3 rounded-2xl flex items-center gap-2">
+          <i class="fas fa-plus"></i> Добавить товар
+        </button>
+        <div class="bg-white rounded-3xl shadow overflow-hidden" id="items-table"></div>
+      </div>
+
+      <!-- History Tab -->
+      <div id="tab-1" class="hidden">
+        <div class="bg-white p-6 rounded-3xl shadow mb-6 flex gap-4">
+          <input id="history-item-id" placeholder="ID товара" class="border p-3 rounded-2xl w-40">
+          <button onclick="loadHistory()" class="bg-blue-600 text-white px-8 rounded-2xl">Показать историю</button>
+          <button onclick="exportCSV()" class="bg-orange-600 text-white px-8 rounded-2xl">Экспорт CSV</button>
+        </div>
+        <div class="bg-white rounded-3xl shadow overflow-hidden" id="history-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -3,9 +3,10 @@ package authgrpc
 import (
 	"context"
 	"errors"
-	ssov1 "sso/gen/sso"
 	domain "sso/internal/domain"
 	customErr "sso/internal/domain/errors"
+
+	ssov1 "github.com/sj-shoff/sso_proto/gen/go/sso"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

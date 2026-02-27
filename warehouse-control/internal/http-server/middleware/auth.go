@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"strings"
-
 	"warehouse-control/internal/domain"
 	customErr "warehouse-control/internal/domain/errors"
 
@@ -21,9 +20,7 @@ type Claims struct {
 
 type contextKey string
 
-const (
-	UserContextKey contextKey = "user"
-)
+const UserContextKey contextKey = "user"
 
 type AuthMiddleware struct {
 	secret string
@@ -31,10 +28,7 @@ type AuthMiddleware struct {
 }
 
 func NewAuthMiddleware(secret string, logger *zlog.Zerolog) *AuthMiddleware {
-	return &AuthMiddleware{
-		secret: secret,
-		logger: logger,
-	}
+	return &AuthMiddleware{secret: secret, logger: logger}
 }
 
 func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
@@ -48,7 +42,6 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			m.logger.Warn().Msg("Invalid authorization header format")
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -74,11 +67,9 @@ func (m *AuthMiddleware) validateToken(tokenString string) (*Claims, error) {
 		}
 		return []byte(m.secret), nil
 	})
-
 	if err != nil || !token.Valid {
 		return nil, customErr.ErrTokenInvalid
 	}
-
 	return claims, nil
 }
 
@@ -90,32 +81,13 @@ func (m *AuthMiddleware) RequireRole(roles ...domain.UserRole) func(next http.Ha
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
-
-			allowed := false
 			for _, role := range roles {
 				if claims.Role == role {
-					allowed = true
-					break
+					next.ServeHTTP(w, r)
+					return
 				}
 			}
-
-			if !allowed {
-				m.logger.Warn().Str("role", string(claims.Role)).Msg("Access forbidden")
-				http.Error(w, "forbidden", http.StatusForbidden)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func (m *AuthMiddleware) SetDBUser(username string) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Устанавливаем пользователя для триггера БД
-			// В реальном проекте это делается через connection pool
-			next.ServeHTTP(w, r)
+			http.Error(w, "forbidden", http.StatusForbidden)
 		})
 	}
 }

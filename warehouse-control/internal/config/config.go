@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/wb-go/wbf/retry"
 )
 
 type Config struct {
@@ -30,6 +31,14 @@ type Config struct {
 		Secret   string `env:"JWT_SECRET" validate:"required"`
 		ExpHours int    `env:"JWT_EXP_HOURS" validate:"required"`
 	}
+	SSO struct {
+		GRPCAddr string `env:"SSO_GRPC_ADDR" validate:"required"`
+	}
+	Retries struct {
+		Attempts int     `env:"RETRIES_ATTEMPTS" validate:"required"`
+		DelayMs  int     `env:"RETRIES_DELAY_MS" validate:"required"`
+		Backoff  float64 `env:"RETRIES_BACKOFF" validate:"required"`
+	}
 }
 
 func MustLoad() (*Config, error) {
@@ -37,16 +46,21 @@ func MustLoad() (*Config, error) {
 	if err := cleanenv.ReadEnv(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to read environment variables: %w", err)
 	}
-
-	validate := validator.New()
-	if err := validate.Struct(&cfg); err != nil {
+	if err := validator.New().Struct(&cfg); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
-
 	return &cfg, nil
 }
 
 func (c *Config) DBDSN() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		c.DB.User, c.DB.Pass, c.DB.Host, c.DB.Port, c.DB.DBName)
+}
+
+func (c *Config) DefaultRetryStrategy() retry.Strategy {
+	return retry.Strategy{
+		Attempts: c.Retries.Attempts,
+		Delay:    time.Duration(c.Retries.DelayMs) * time.Millisecond,
+		Backoff:  c.Retries.Backoff,
+	}
 }
