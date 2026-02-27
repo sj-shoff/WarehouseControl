@@ -1,4 +1,4 @@
-.PHONY: run build migrate-up migrate-down docker-up docker-down proto
+.PHONY: run build migrate-up migrate-down docker-up docker-down
 
 include .env
 export
@@ -20,13 +20,3 @@ migrate-up:
 
 migrate-down:
 	goose -dir migrations postgres "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable" down
-
-proto:
-	protoc --go_out=$(GEN_PATH) \
-		--go_opt=paths=source_relative \
-		--go-grpc_out=$(GEN_PATH) \
-		--go-grpc_opt=paths=source_relative \
-		-I=$(PROTO_PATH) \
-		$(PROTO_PATH)/sso/v1/auth.proto
-
-
