@@ -32,7 +32,8 @@ type Config struct {
 		ExpHours int    `env:"JWT_EXP_HOURS" validate:"required"`
 	}
 	SSO struct {
-		GRPCAddr string `env:"SSO_GRPC_ADDR" validate:"required"`
+		GRPCAddr      string        `env:"SSO_GRPC_ADDR" validate:"required"`
+		ClientTimeout time.Duration `env:"SSO_CLIENT_TIMEOUT" validate:"required"`
 	}
 	Retries struct {
 		Attempts int     `env:"RETRIES_ATTEMPTS" validate:"required"`

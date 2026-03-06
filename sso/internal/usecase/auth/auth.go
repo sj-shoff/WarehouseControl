@@ -46,7 +46,6 @@ func (s *AuthUsecase) Login(ctx context.Context, username, password string, appI
 
 	s.logger.Info().Str("username", username).Int("app_id", appID).Msg("login attempt")
 
-	// проверка приложения
 	if _, err := s.appUsecase.GetByID(ctx, appID); err != nil {
 		s.logger.Warn().Int("app_id", appID).Msg("app not found")
 		return nil, "", time.Time{}, customErr.ErrInvalidInput
@@ -137,7 +136,9 @@ func (s *AuthUsecase) GetUsers(ctx context.Context) ([]*domain.User, error) {
 func (s *AuthUsecase) UpdateUserRole(ctx context.Context, userID int64, role domain.UserRole) error {
 	const op = "auth_usecase.UpdateUserRole"
 	if userID <= 0 || !domain.IsValidRole(string(role)) {
-		return customErr.ErrInvalidInput
+		s.logger.Error().Int64("userID", userID).Msg("failed to update user")
+		return fmt.Errorf("%s: %w", op, customErr.ErrInvalidInput)
 	}
+	s.logger.Info().Int64("userID", userID).Msg("user updated")
 	return s.userRepo.UpdateUserRole(ctx, userID, role)
 }

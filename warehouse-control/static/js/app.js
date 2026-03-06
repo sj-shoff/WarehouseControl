@@ -1,5 +1,4 @@
 let token = localStorage.getItem('token');
-
 const api = (url, method = 'GET', body = null) => {
   const opts = {
     method,
@@ -11,7 +10,6 @@ const api = (url, method = 'GET', body = null) => {
   if (body) opts.body = JSON.stringify(body);
   return fetch(url, opts);
 };
-
 async function login() {
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
@@ -31,12 +29,10 @@ async function login() {
     alert('Ошибка входа');
   }
 }
-
 function logout() {
   localStorage.removeItem('token');
   location.reload();
 }
-
 async function loadItems() {
   const res = await api('/items');
   const data = await res.json();
@@ -47,14 +43,12 @@ async function loadItems() {
   html += `</tbody></table>`;
   document.getElementById('items-table').innerHTML = html;
 }
-
 async function deleteItem(id) {
   if (confirm('Удалить товар?')) {
     await api(`/items/${id}`, 'DELETE');
     loadItems();
   }
 }
-
 async function exportCSV() {
   const res = await api('/history/export');
   const blob = await res.blob();
@@ -64,7 +58,6 @@ async function exportCSV() {
   a.download = 'history.csv';
   a.click();
 }
-
 // Инициализация
 if (token) {
   document.getElementById('login').classList.add('hidden');

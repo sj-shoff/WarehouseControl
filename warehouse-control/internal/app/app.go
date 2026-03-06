@@ -38,7 +38,7 @@ func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
 		return nil, fmt.Errorf("db: %w", err)
 	}
 
-	ssoClient, err := sso.NewClient(cfg.SSO.GRPCAddr)
+	ssoClient, err := sso.NewClient(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("sso: %w", err)
 	}

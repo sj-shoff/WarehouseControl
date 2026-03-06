@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"warehouse-control/internal/domain"
 	customErr "warehouse-control/internal/domain/errors"
 
@@ -30,9 +31,7 @@ func (s *ItemsUsecase) CreateItem(ctx context.Context, item *domain.Item, userna
 		s.logger.Error().Err(err).Msg("Validation failed")
 		return 0, fmt.Errorf("%w: %v", customErr.ErrInvalidInput, err)
 	}
-
 	s.logger.Info().Str("user", username).Msg("Creating item")
-
 	id, err := s.repo.CreateItem(ctx, item, username)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("Failed to create item")
@@ -41,14 +40,12 @@ func (s *ItemsUsecase) CreateItem(ctx context.Context, item *domain.Item, userna
 		}
 		return 0, fmt.Errorf("%w: %v", customErr.ErrInternal, err)
 	}
-
 	s.logger.Info().Int64("id", id).Str("user", username).Msg("Item created")
 	return id, nil
 }
 
 func (s *ItemsUsecase) GetItems(ctx context.Context) ([]*domain.Item, error) {
 	s.logger.Info().Msg("Getting items")
-
 	items, err := s.repo.GetItems(ctx)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("Failed to get items")
@@ -57,7 +54,6 @@ func (s *ItemsUsecase) GetItems(ctx context.Context) ([]*domain.Item, error) {
 		}
 		return nil, fmt.Errorf("%w: %v", customErr.ErrInternal, err)
 	}
-
 	s.logger.Info().Int("count", len(items)).Msg("Items retrieved")
 	return items, nil
 }
@@ -66,9 +62,7 @@ func (s *ItemsUsecase) GetItemByID(ctx context.Context, id int64) (*domain.Item,
 	if id <= 0 {
 		return nil, customErr.ErrInvalidInput
 	}
-
 	s.logger.Info().Int64("id", id).Msg("Getting item")
-
 	item, err := s.repo.GetItemByID(ctx, id)
 	if err != nil {
 		s.logger.Error().Err(err).Int64("id", id).Msg("Failed to get item")
@@ -80,7 +74,6 @@ func (s *ItemsUsecase) GetItemByID(ctx context.Context, id int64) (*domain.Item,
 		}
 		return nil, fmt.Errorf("%w: %v", customErr.ErrInternal, err)
 	}
-
 	s.logger.Info().Int64("id", id).Msg("Item retrieved")
 	return item, nil
 }
@@ -89,14 +82,11 @@ func (s *ItemsUsecase) UpdateItem(ctx context.Context, id int64, item *domain.It
 	if id <= 0 {
 		return customErr.ErrInvalidInput
 	}
-
 	if err := s.validate.Struct(item); err != nil {
 		s.logger.Error().Err(err).Msg("Validation failed")
 		return fmt.Errorf("%w: %v", customErr.ErrInvalidInput, err)
 	}
-
 	s.logger.Info().Int64("id", id).Str("user", username).Msg("Updating item")
-
 	err := s.repo.UpdateItem(ctx, id, item, username)
 	if err != nil {
 		s.logger.Error().Err(err).Int64("id", id).Msg("Failed to update item")
@@ -108,7 +98,6 @@ func (s *ItemsUsecase) UpdateItem(ctx context.Context, id int64, item *domain.It
 		}
 		return fmt.Errorf("%w: %v", customErr.ErrInternal, err)
 	}
-
 	s.logger.Info().Int64("id", id).Str("user", username).Msg("Item updated")
 	return nil
 }
@@ -117,9 +106,7 @@ func (s *ItemsUsecase) DeleteItem(ctx context.Context, id int64, username string
 	if id <= 0 {
 		return customErr.ErrInvalidInput
 	}
-
 	s.logger.Info().Int64("id", id).Str("user", username).Msg("Deleting item")
-
 	err := s.repo.DeleteItem(ctx, id, username)
 	if err != nil {
 		s.logger.Error().Err(err).Int64("id", id).Msg("Failed to delete item")
@@ -131,7 +118,6 @@ func (s *ItemsUsecase) DeleteItem(ctx context.Context, id int64, username string
 		}
 		return fmt.Errorf("%w: %v", customErr.ErrInternal, err)
 	}
-
 	s.logger.Info().Int64("id", id).Str("user", username).Msg("Item deleted")
 	return nil
 }

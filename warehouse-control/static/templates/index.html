@@ -20,7 +20,6 @@
         </button>
       </div>
     </div>
-
     <!-- Main App -->
     <div id="app" class="hidden">
       <div class="flex justify-between items-center mb-8">
@@ -32,13 +31,11 @@
           </button>
         </div>
       </div>
-
       <!-- Tabs -->
       <div class="flex border-b mb-6">
         <button onclick="switchTab(0)" class="tab active px-8 py-4 font-medium" data-tab="0">Товары</button>
         <button onclick="switchTab(1)" class="tab px-8 py-4 font-medium" data-tab="1">История</button>
       </div>
-
       <!-- Items Tab -->
       <div id="tab-0">
         <button onclick="showAddModal()" class="mb-6 bg-green-600 text-white px-6 py-3 rounded-2xl flex items-center gap-2">
@@ -46,7 +43,6 @@
         </button>
         <div class="bg-white rounded-3xl shadow overflow-hidden" id="items-table"></div>
       </div>
-
       <!-- History Tab -->
       <div id="tab-1" class="hidden">
         <div class="bg-white p-6 rounded-3xl shadow mb-6 flex gap-4">
@@ -58,7 +54,6 @@
       </div>
     </div>
   </div>
-
   <script src="/static/js/app.js"></script>
 </body>
 </html>

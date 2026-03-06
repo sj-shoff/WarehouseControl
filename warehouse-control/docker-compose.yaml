@@ -1,32 +1,20 @@
 version: '3.8'
 services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_PORT}:5432"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  sso:
+  warehouse:
     build: .
     env_file:
       - .env
     ports:
-      - "${GRPC_PORT}:${GRPC_PORT}"
+      - "${SERVER_PORT}:${SERVER_PORT}"
     depends_on:
       postgres:
         condition: service_healthy
+      sso:
+        condition: service_started
     restart: unless-stopped
+    networks:
+      - infra-net
 
-volumes:
-  postgres_data:
+networks:
+  infra-net:
+    external: true
