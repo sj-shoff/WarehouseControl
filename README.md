@@ -88,13 +88,14 @@ cd warehouse-control && make run
 4. Доступ к фронтенду: http://localhost:8037
 
 ### Миграции БД
-
-Используйте Goose для миграций:
-
 Для SSO:
+```bash
 cd sso && make migrate-up
-textДля Warehouse:
+```
+Для Warehouse:
+```bash
 cd warehouse-control && make migrate-up
+```
 
 ### Пользователи по умолчанию
 
@@ -135,16 +136,3 @@ grpcurl -plaintext -d '{"username": "viewer", "password": "123", "role": "viewer
   - GET /history?item_id=...&action=...&username=...&date_from=...&date_to=...
   - GET /history/item/{id}
   - GET /history/export (CSV, с фильтрами)
-
-## Разработка
-
-- Сборка: `go build`
-- Тесты: `go test ./...` (добавьте тесты при необходимости)
-- Линтинг: golangci-lint
-
-## Известные проблемы / Улучшения
-
-- Нет пагинации для больших списков.
-- Базовый diff (без специальной библиотеки).
-- В продакшене используйте инструмент миграций (например, Goose).
-- Избегайте триггеров БД в реальных проектах; используйте аудит на уровне приложения.
