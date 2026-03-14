@@ -34,4 +34,5 @@ type ItemResponse struct {
 
 type ItemsResponse struct {
 	Items []*ItemResponse `json:"items"`
+	Total int             `json:"total"`
 }

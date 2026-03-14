@@ -1,47 +1,59 @@
 package router
 
 import (
-	"net/http"
+	"warehouse-control/internal/config"
 	"warehouse-control/internal/domain"
 	authH "warehouse-control/internal/http-server/handler/auth"
 	historyH "warehouse-control/internal/http-server/handler/history"
 	itemsH "warehouse-control/internal/http-server/handler/items"
+
 	"warehouse-control/internal/http-server/middleware"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
+	"github.com/wb-go/wbf/zlog"
 )
 
-func New(items *itemsH.ItemsHandler, history *historyH.HistoryHandler, auth *authH.AuthHandler, mw *middleware.AuthMiddleware) http.Handler {
-	r := chi.NewRouter()
+func New(items *itemsH.ItemsHandler,
+	history *historyH.HistoryHandler,
+	auth *authH.AuthHandler,
+	mw *middleware.AuthMiddleware,
+	cfg *config.Config,
+	logger *zlog.Zerolog) *gin.Engine {
 
-	r.Use(middleware.RecoveryMiddleware)
-	r.Use(middleware.LoggingMiddleware)
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
 
-	r.Handle("/static/*", http.StripPrefix("/static", http.FileServer(http.Dir("./static"))))
+	r.Use(middleware.RecoveryMiddleware())
+	r.Use(middleware.LoggingMiddleware())
+	if cfg.RateLimit.Enabled {
+		rateLimiterMiddleware := middleware.NewRateLimiterMiddleware(
+			cfg.RateLimit.Rate,
+			cfg.RateLimit.Capacity,
+			logger,
+		)
+		r.Use(rateLimiterMiddleware.Middleware())
+	}
 
-	r.Post("/auth/login", auth.Login)
+	r.HandleMethodNotAllowed = true
 
-	r.Group(func(r chi.Router) {
-		r.Use(mw.Middleware)
+	r.Static("/static", "./static")
+	r.POST("/auth/login", auth.Login)
 
-		r.Route("/items", func(r chi.Router) {
-			r.Get("/", items.GetItems)
-			r.Get("/{id}", items.GetItemByID)
+	protected := r.Group("/")
+	protected.Use(mw.Middleware())
 
-			r.With(mw.RequireRole(domain.RoleManager, domain.RoleAdmin)).Post("/", items.CreateItem)
-			r.With(mw.RequireRole(domain.RoleManager, domain.RoleAdmin)).Put("/{id}", items.UpdateItem)
-			r.With(mw.RequireRole(domain.RoleManager, domain.RoleAdmin)).Delete("/{id}", items.DeleteItem)
-		})
+	protected.GET("/items", items.GetItems)
+	protected.GET("/items/:id", items.GetItemByID)
+	protected.POST("/items", mw.RequireRole(domain.RoleManager, domain.RoleAdmin), items.CreateItem)
+	protected.PUT("/items/:id", mw.RequireRole(domain.RoleManager, domain.RoleAdmin), items.UpdateItem)
+	protected.DELETE("/items/:id", mw.RequireRole(domain.RoleManager, domain.RoleAdmin), items.DeleteItem)
+	protected.DELETE("/items/bulk", mw.RequireRole(domain.RoleAdmin), items.BulkDeleteItems)
+	protected.GET("/history", history.GetHistory)
+	protected.GET("/history/item/:id", history.GetItemHistory)
+	protected.GET("/history/export", history.ExportHistoryCSV)
 
-		r.Route("/history", func(r chi.Router) {
-			r.Get("/", history.GetHistory)
-			r.Get("/item/{id}", history.GetItemHistory)
-			r.Get("/export", history.ExportHistoryCSV)
-		})
-	})
-
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./static/index.html")
+	r.GET("/", func(c *gin.Context) {
+		c.File("./static/index.html")
 	})
 
 	return r

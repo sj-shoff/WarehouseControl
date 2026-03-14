@@ -40,6 +40,11 @@ type Config struct {
 		DelayMs  int     `env:"RETRIES_DELAY_MS" validate:"required"`
 		Backoff  float64 `env:"RETRIES_BACKOFF" validate:"required"`
 	}
+	RateLimit struct {
+		Enabled  bool `env:"RATE_LIMIT_ENABLED" env-default:"true"`
+		Rate     int  `env:"RATE_LIMIT_RATE" env-default:"5"`
+		Capacity int  `env:"RATE_LIMIT_CAPACITY" env-default:"10"`
+	}
 }
 
 func MustLoad() (*Config, error) {

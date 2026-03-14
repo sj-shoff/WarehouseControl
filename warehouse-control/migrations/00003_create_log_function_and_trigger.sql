@@ -15,7 +15,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE TRIGGER items_history_trigger
 AFTER INSERT OR UPDATE OR DELETE ON items
 FOR EACH ROW EXECUTE PROCEDURE log_item_changes();

@@ -2,18 +2,9 @@ package dto
 
 import "time"
 
-type HistoryFilterRequest struct {
-	ItemID   *int64  `json:"item_id"`
-	Action   *string `json:"action"`
-	Username *string `json:"username"`
-	DateFrom *string `json:"date_from"`
-	DateTo   *string `json:"date_to"`
-	Limit    int     `json:"limit"`
-	Offset   int     `json:"offset"`
-}
-
 type HistoryResponse struct {
 	Records []*HistoryRecordResponse `json:"history"`
+	Total   int                      `json:"total"`
 }
 
 type HistoryRecordResponse struct {

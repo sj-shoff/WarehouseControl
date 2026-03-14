@@ -3,19 +3,22 @@ package middleware
 import (
 	"net/http"
 
+	customErr "warehouse-control/internal/domain/errors"
+
+	"github.com/gin-gonic/gin"
 	"github.com/wb-go/wbf/zlog"
 )
 
-func RecoveryMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func RecoveryMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
 		defer func() {
 			if err := recover(); err != nil {
 				zlog.Logger.Error().
 					Interface("error", err).
 					Msg("Panic recovered")
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": customErr.ErrInternal})
 			}
 		}()
-		next.ServeHTTP(w, r)
-	})
+		c.Next()
+	}
 }

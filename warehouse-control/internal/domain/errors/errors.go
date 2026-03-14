@@ -10,4 +10,5 @@ var (
 	ErrDatabase     = errors.New("database error")
 	ErrInternal     = errors.New("internal error")
 	ErrTokenInvalid = errors.New("token invalid")
+	ErrRateLimit    = errors.New("rate limit exceeded")
 )

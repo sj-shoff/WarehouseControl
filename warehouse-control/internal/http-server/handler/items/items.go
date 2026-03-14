@@ -1,7 +1,6 @@
 package items_handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -11,7 +10,7 @@ import (
 	"warehouse-control/internal/http-server/handler/items/dto"
 	"warehouse-control/internal/http-server/middleware"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"github.com/wb-go/wbf/zlog"
 )
 
@@ -27,7 +26,7 @@ func NewHandler(itemsUsecase itemsUsecase, logger *zlog.Zerolog) *ItemsHandler {
 	}
 }
 
-func (h *ItemsHandler) writeError(w http.ResponseWriter, err error) {
+func (h *ItemsHandler) writeError(c *gin.Context, err error) {
 	code := http.StatusInternalServerError
 	msg := "internal_error"
 	switch {
@@ -44,19 +43,19 @@ func (h *ItemsHandler) writeError(w http.ResponseWriter, err error) {
 		code = http.StatusInternalServerError
 		msg = "database_error"
 	}
-	http.Error(w, msg, code)
+	c.JSON(code, gin.H{"error": msg})
 }
 
-func (h *ItemsHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetClaimsFromContext(r)
+func (h *ItemsHandler) CreateItem(c *gin.Context) {
+	claims := middleware.GetClaimsFromContext(c)
 	if claims == nil {
-		h.writeError(w, customErr.ErrUnauthorized)
+		h.writeError(c, customErr.ErrUnauthorized)
 		return
 	}
 	var req dto.CreateItemRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error().Err(err).Msg("Failed to decode request")
-		h.writeError(w, customErr.ErrInvalidInput)
+		h.writeError(c, customErr.ErrInvalidInput)
 		return
 	}
 	item := &domain.Item{
@@ -67,71 +66,76 @@ func (h *ItemsHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		Category: req.Category,
 		Location: req.Location,
 	}
-	id, err := h.itemsUsecase.CreateItem(r.Context(), item, claims.Username)
+	id, err := h.itemsUsecase.CreateItem(c.Request.Context(), item, claims.Username)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("CreateItem failed")
-		h.writeError(w, err)
+		h.writeError(c, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]int64{"id": id})
+	c.JSON(http.StatusCreated, gin.H{"id": id})
 	h.logger.Info().Int64("id", id).Str("user", claims.Username).Msg("Item created")
 }
 
-func (h *ItemsHandler) GetItems(w http.ResponseWriter, r *http.Request) {
-	items, err := h.itemsUsecase.GetItems(r.Context())
+func (h *ItemsHandler) GetItems(c *gin.Context) {
+	limitStr := c.Query("limit")
+	limit, _ := strconv.Atoi(limitStr)
+	if limit == 0 {
+		limit = 100
+	}
+	offsetStr := c.Query("offset")
+	offset, _ := strconv.Atoi(offsetStr)
+	search := c.Query("search")
+	items, total, err := h.itemsUsecase.GetItems(c.Request.Context(), limit, offset, search)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("GetItems failed")
-		h.writeError(w, err)
+		h.writeError(c, err)
 		return
 	}
 	resp := dto.ItemsResponse{
 		Items: make([]*dto.ItemResponse, len(items)),
+		Total: total,
 	}
 	for i, item := range items {
 		resp.Items[i] = h.toItemResponse(item)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
-func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+func (h *ItemsHandler) GetItemByID(c *gin.Context) {
+	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		h.writeError(w, customErr.ErrInvalidInput)
+		h.writeError(c, customErr.ErrInvalidInput)
 		return
 	}
-	item, err := h.itemsUsecase.GetItemByID(r.Context(), id)
+	item, err := h.itemsUsecase.GetItemByID(c.Request.Context(), id)
 	if err != nil {
-		h.writeError(w, err)
+		h.writeError(c, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(h.toItemResponse(item))
+	c.JSON(http.StatusOK, h.toItemResponse(item))
 }
 
-func (h *ItemsHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetClaimsFromContext(r)
+func (h *ItemsHandler) UpdateItem(c *gin.Context) {
+	claims := middleware.GetClaimsFromContext(c)
 	if claims == nil {
-		h.writeError(w, customErr.ErrUnauthorized)
+		h.writeError(c, customErr.ErrUnauthorized)
 		return
 	}
-	idStr := chi.URLParam(r, "id")
+	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		h.writeError(w, customErr.ErrInvalidInput)
+		h.writeError(c, customErr.ErrInvalidInput)
 		return
 	}
 	var req dto.UpdateItemRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, customErr.ErrInvalidInput)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.writeError(c, customErr.ErrInvalidInput)
 		return
 	}
-	item, err := h.itemsUsecase.GetItemByID(r.Context(), id)
+	item, err := h.itemsUsecase.GetItemByID(c.Request.Context(), id)
 	if err != nil {
-		h.writeError(w, err)
+		h.writeError(c, err)
 		return
 	}
 	if req.Name != "" {
@@ -152,34 +156,56 @@ func (h *ItemsHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	if req.Location != "" {
 		item.Location = req.Location
 	}
-	err = h.itemsUsecase.UpdateItem(r.Context(), id, item, claims.Username)
+	err = h.itemsUsecase.UpdateItem(c.Request.Context(), id, item, claims.Username)
 	if err != nil {
-		h.writeError(w, err)
+		h.writeError(c, err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	c.Status(http.StatusOK)
 	h.logger.Info().Int64("id", id).Str("user", claims.Username).Msg("Item updated")
 }
 
-func (h *ItemsHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetClaimsFromContext(r)
+func (h *ItemsHandler) DeleteItem(c *gin.Context) {
+	claims := middleware.GetClaimsFromContext(c)
 	if claims == nil {
-		h.writeError(w, customErr.ErrUnauthorized)
+		h.writeError(c, customErr.ErrUnauthorized)
 		return
 	}
-	idStr := chi.URLParam(r, "id")
+	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		h.writeError(w, customErr.ErrInvalidInput)
+		h.writeError(c, customErr.ErrInvalidInput)
 		return
 	}
-	err = h.itemsUsecase.DeleteItem(r.Context(), id, claims.Username)
+	err = h.itemsUsecase.DeleteItem(c.Request.Context(), id, claims.Username)
 	if err != nil {
-		h.writeError(w, err)
+		h.writeError(c, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	c.Status(http.StatusNoContent)
 	h.logger.Info().Int64("id", id).Str("user", claims.Username).Msg("Item deleted")
+}
+
+func (h *ItemsHandler) BulkDeleteItems(c *gin.Context) {
+	claims := middleware.GetClaimsFromContext(c)
+	if claims == nil {
+		h.writeError(c, customErr.ErrUnauthorized)
+		return
+	}
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.writeError(c, customErr.ErrInvalidInput)
+		return
+	}
+	err := h.itemsUsecase.BulkDeleteItems(c.Request.Context(), req.IDs, claims.Username)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+	h.logger.Info().Str("user", claims.Username).Msg("Items bulk deleted")
 }
 
 func (h *ItemsHandler) toItemResponse(item *domain.Item) *dto.ItemResponse {

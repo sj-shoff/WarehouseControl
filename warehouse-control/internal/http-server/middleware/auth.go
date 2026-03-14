@@ -4,9 +4,11 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
 	"warehouse-control/internal/domain"
 	customErr "warehouse-control/internal/domain/errors"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/wb-go/wbf/zlog"
 )
@@ -31,32 +33,30 @@ func NewAuthMiddleware(secret string, logger *zlog.Zerolog) *AuthMiddleware {
 	return &AuthMiddleware{secret: secret, logger: logger}
 }
 
-func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
+func (m *AuthMiddleware) Middleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			m.logger.Warn().Msg("Missing authorization header")
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrUnauthorized.Error()})
 			return
 		}
-
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrUnauthorized.Error()})
 			return
 		}
-
 		tokenString := parts[1]
 		claims, err := m.validateToken(tokenString)
 		if err != nil {
 			m.logger.Warn().Err(err).Msg("Token validation failed")
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrUnauthorized.Error()})
 			return
 		}
-
-		ctx := context.WithValue(r.Context(), UserContextKey, claims)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+		ctx := context.WithValue(c.Request.Context(), UserContextKey, claims)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
 }
 
 func (m *AuthMiddleware) validateToken(tokenString string) (*Claims, error) {
@@ -73,27 +73,25 @@ func (m *AuthMiddleware) validateToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-func (m *AuthMiddleware) RequireRole(roles ...domain.UserRole) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			claims, ok := r.Context().Value(UserContextKey).(*Claims)
-			if !ok || claims == nil {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+func (m *AuthMiddleware) RequireRole(roles ...domain.UserRole) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, ok := c.Request.Context().Value(UserContextKey).(*Claims)
+		if !ok || claims == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrUnauthorized.Error()})
+			return
+		}
+		for _, role := range roles {
+			if claims.Role == role {
+				c.Next()
 				return
 			}
-			for _, role := range roles {
-				if claims.Role == role {
-					next.ServeHTTP(w, r)
-					return
-				}
-			}
-			http.Error(w, "forbidden", http.StatusForbidden)
-		})
+		}
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": customErr.ErrForbidden.Error()})
 	}
 }
 
-func GetClaimsFromContext(r *http.Request) *Claims {
-	claims, ok := r.Context().Value(UserContextKey).(*Claims)
+func GetClaimsFromContext(c *gin.Context) *Claims {
+	claims, ok := c.Request.Context().Value(UserContextKey).(*Claims)
 	if !ok {
 		return nil
 	}
