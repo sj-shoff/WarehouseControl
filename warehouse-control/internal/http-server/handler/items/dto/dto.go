@@ -1,6 +1,9 @@
 package dto
 
-import "time"
+import (
+	"time"
+	"warehouse-control/internal/domain"
+)
 
 type CreateItemRequest struct {
 	Name     string  `json:"name"`
@@ -35,4 +38,18 @@ type ItemResponse struct {
 type ItemsResponse struct {
 	Items []*ItemResponse `json:"items"`
 	Total int             `json:"total"`
+}
+
+func ToItemResponse(item *domain.Item) *ItemResponse {
+	return &ItemResponse{
+		ID:        item.ID,
+		Name:      item.Name,
+		SKU:       item.SKU,
+		Quantity:  item.Quantity,
+		Price:     item.Price,
+		Category:  item.Category,
+		Location:  item.Location,
+		CreatedAt: item.CreatedAt,
+		UpdatedAt: item.UpdatedAt,
+	}
 }

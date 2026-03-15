@@ -2,11 +2,13 @@ package history_handler
 
 import (
 	"encoding/csv"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"warehouse-control/internal/domain"
+	customErr "warehouse-control/internal/domain/errors"
 	"warehouse-control/internal/http-server/handler/history/dto"
 
 	"github.com/gin-gonic/gin"
@@ -64,7 +66,7 @@ func (h *HistoryHandler) GetHistory(c *gin.Context) {
 	records, err := h.historyUsecase.GetHistory(c.Request.Context(), filter)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("GetHistory failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
+		h.writeError(c, err)
 		return
 	}
 	resp := dto.HistoryResponse{
@@ -72,7 +74,7 @@ func (h *HistoryHandler) GetHistory(c *gin.Context) {
 		Total:   len(records),
 	}
 	for i, rec := range records {
-		resp.Records[i] = h.toHistoryRecordResponse(rec)
+		resp.Records[i] = dto.ToHistoryRecordResponse(rec)
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -81,20 +83,20 @@ func (h *HistoryHandler) GetItemHistory(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_input"})
+		h.writeError(c, customErr.ErrInvalidInput)
 		return
 	}
 	records, err := h.historyUsecase.GetHistoryByItemID(c.Request.Context(), id)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("GetItemHistory failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
+		h.writeError(c, err)
 		return
 	}
 	resp := dto.HistoryResponse{
 		Records: make([]*dto.HistoryRecordResponse, len(records)),
 	}
 	for i, rec := range records {
-		resp.Records[i] = h.toHistoryRecordResponse(rec)
+		resp.Records[i] = dto.ToHistoryRecordResponse(rec)
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -104,6 +106,7 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 		Limit:  1000,
 		Offset: 0,
 	}
+
 	if limitStr := c.Query("limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil {
 			filter.Limit = l
@@ -138,7 +141,7 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 	records, err := h.historyUsecase.GetHistory(c.Request.Context(), filter)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("ExportHistoryCSV failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
+		h.writeError(c, err)
 		return
 	}
 
@@ -150,7 +153,7 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 
 	if err := writer.Write([]string{"ID", "Item ID", "Action", "Changed By", "Changed At", "Old Name", "Old SKU", "Old Quantity", "Old Price", "New Name", "New SKU", "New Quantity", "New Price"}); err != nil {
 		h.logger.Error().Err(err).Msg("Failed to write CSV header")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
+		h.writeError(c, customErr.ErrInternal)
 		return
 	}
 
@@ -179,37 +182,25 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 			newName, newSKU, newQty, newPrice,
 		}); err != nil {
 			h.logger.Error().Err(err).Msg("Failed to write CSV row")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
+			h.writeError(c, customErr.ErrInternal)
 			return
 		}
 	}
 }
 
-func (h *HistoryHandler) toHistoryRecordResponse(rec *domain.HistoryRecord) *dto.HistoryRecordResponse {
-	resp := &dto.HistoryRecordResponse{
-		ID:        rec.ID,
-		ItemID:    rec.ItemID,
-		Action:    rec.Action,
-		ChangedBy: rec.ChangedBy,
-		ChangedAt: rec.ChangedAt,
+func (h *HistoryHandler) writeError(c *gin.Context, err error) {
+	code := http.StatusInternalServerError
+	switch {
+	case errors.Is(err, customErr.ErrInvalidInput):
+		code = http.StatusBadRequest
+	case errors.Is(err, customErr.ErrItemNotFound):
+		code = http.StatusNotFound
+	case errors.Is(err, customErr.ErrForbidden):
+		code = http.StatusForbidden
+	case errors.Is(err, customErr.ErrDatabase):
+		code = http.StatusInternalServerError
+	case errors.Is(err, customErr.ErrInternal):
+		code = http.StatusInternalServerError
 	}
-	if rec.OldData != nil {
-		resp.OldData = &dto.ItemData{
-			ID:       rec.OldData.ID,
-			Name:     rec.OldData.Name,
-			SKU:      rec.OldData.SKU,
-			Quantity: rec.OldData.Quantity,
-			Price:    rec.OldData.Price,
-		}
-	}
-	if rec.NewData != nil {
-		resp.NewData = &dto.ItemData{
-			ID:       rec.NewData.ID,
-			Name:     rec.NewData.Name,
-			SKU:      rec.NewData.SKU,
-			Quantity: rec.NewData.Quantity,
-			Price:    rec.NewData.Price,
-		}
-	}
-	return resp
+	c.JSON(code, gin.H{"error": err.Error()})
 }

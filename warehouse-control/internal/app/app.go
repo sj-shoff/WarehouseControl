@@ -11,12 +11,11 @@ import (
 	itemsH "warehouse-control/internal/http-server/handler/items"
 	"warehouse-control/internal/http-server/middleware"
 	"warehouse-control/internal/http-server/router"
-	historyRepo "warehouse-control/internal/repository/history"
-	itemsRepo "warehouse-control/internal/repository/items"
+	historyRepo "warehouse-control/internal/repository/history/postgres"
+	itemsRepo "warehouse-control/internal/repository/items/postgres"
 	historyUc "warehouse-control/internal/usecase/history"
 	itemsUc "warehouse-control/internal/usecase/items"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/wb-go/wbf/dbpg"
 	"github.com/wb-go/wbf/zlog"
 )
@@ -26,7 +25,6 @@ type App struct {
 	logger    *zlog.Zerolog
 	server    *http.Server
 	ssoClient *sso.Client
-	redis     *redis.Client
 }
 
 func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
@@ -47,20 +45,19 @@ func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
 		return nil, fmt.Errorf("sso: %w", err)
 	}
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.Redis.Addr,
-		Password: cfg.Redis.Password,
-		DB:       cfg.Redis.DB,
-	})
 	itemsR := itemsRepo.NewPostgresRepository(db, retries)
 	historyR := historyRepo.NewPostgresRepository(db, retries)
-	itemsU := itemsUc.NewService(itemsR, logger, redisClient)
-	historyU := historyUc.NewService(historyR, logger, redisClient)
+
+	itemsU := itemsUc.NewService(itemsR, logger)
+	historyU := historyUc.NewService(historyR, logger)
+
 	itemsH := itemsH.NewHandler(itemsU, logger)
 	historyH := historyH.NewHandler(historyU, logger)
-	authH := authH.NewHandler(ssoClient, logger)
+	authH := authH.NewHandler(ssoClient, cfg, logger)
+
 	authMW := middleware.NewAuthMiddleware(cfg.JWT.Secret, logger)
-	r := router.New(itemsH, historyH, authH, authMW)
+	r := router.New(itemsH, historyH, authH, authMW, cfg, logger)
+
 	srv := &http.Server{
 		Addr:         ":" + cfg.Server.Addr,
 		Handler:      r,
@@ -68,7 +65,7 @@ func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
 		WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout:  cfg.Server.IdleTimeout,
 	}
-	return &App{cfg: cfg, logger: logger, server: srv, ssoClient: ssoClient, redis: redisClient}, nil
+	return &App{cfg: cfg, logger: logger, server: srv, ssoClient: ssoClient}, nil
 }
 
 func (a *App) Run() error {

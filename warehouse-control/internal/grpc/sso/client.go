@@ -20,7 +20,7 @@ type Client struct {
 func NewClient(cfg *config.Config) (*Client, error) {
 	conn, err := grpc.NewClient(cfg.SSO.GRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial sso: %w", err)
+		return nil, fmt.Errorf("dial sso: %w", err)
 	}
 	return &Client{
 		authClient: ssov1.NewAuthClient(conn),

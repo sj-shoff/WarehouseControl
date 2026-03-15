@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+
 	"warehouse-control/internal/app"
 	"warehouse-control/internal/config"
 
@@ -10,7 +11,6 @@ import (
 
 func main() {
 	zlog.Init()
-
 	cfg, err := config.MustLoad()
 	if err != nil {
 		zlog.Logger.Fatal().Err(err).Msg("Failed to load config")

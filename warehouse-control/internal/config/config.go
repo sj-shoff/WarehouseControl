@@ -28,8 +28,8 @@ type Config struct {
 		ShutdownTimeout time.Duration `env:"SERVER_SHUTDOWN_TIMEOUT" validate:"required"`
 	}
 	JWT struct {
-		Secret   string `env:"JWT_SECRET" validate:"required"`
-		ExpHours int    `env:"JWT_EXP_HOURS" validate:"required"`
+		Secret   string    `env:"JWT_SECRET" validate:"required"`
+		ExpHours time.Time `env:"JWT_EXP_HOURS" validate:"required"`
 	}
 	SSO struct {
 		GRPCAddr      string        `env:"SSO_GRPC_ADDR" validate:"required"`

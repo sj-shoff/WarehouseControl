@@ -26,26 +26,6 @@ func NewHandler(itemsUsecase itemsUsecase, logger *zlog.Zerolog) *ItemsHandler {
 	}
 }
 
-func (h *ItemsHandler) writeError(c *gin.Context, err error) {
-	code := http.StatusInternalServerError
-	msg := "internal_error"
-	switch {
-	case errors.Is(err, customErr.ErrInvalidInput):
-		code = http.StatusBadRequest
-		msg = "invalid_input"
-	case errors.Is(err, customErr.ErrItemNotFound):
-		code = http.StatusNotFound
-		msg = "not_found"
-	case errors.Is(err, customErr.ErrForbidden):
-		code = http.StatusForbidden
-		msg = "forbidden"
-	case errors.Is(err, customErr.ErrDatabase):
-		code = http.StatusInternalServerError
-		msg = "database_error"
-	}
-	c.JSON(code, gin.H{"error": msg})
-}
-
 func (h *ItemsHandler) CreateItem(c *gin.Context) {
 	claims := middleware.GetClaimsFromContext(c)
 	if claims == nil {
@@ -96,7 +76,7 @@ func (h *ItemsHandler) GetItems(c *gin.Context) {
 		Total: total,
 	}
 	for i, item := range items {
-		resp.Items[i] = h.toItemResponse(item)
+		resp.Items[i] = dto.ToItemResponse(item)
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -113,7 +93,7 @@ func (h *ItemsHandler) GetItemByID(c *gin.Context) {
 		h.writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, h.toItemResponse(item))
+	c.JSON(http.StatusOK, dto.ToItemResponse(item))
 }
 
 func (h *ItemsHandler) UpdateItem(c *gin.Context) {
@@ -208,16 +188,19 @@ func (h *ItemsHandler) BulkDeleteItems(c *gin.Context) {
 	h.logger.Info().Str("user", claims.Username).Msg("Items bulk deleted")
 }
 
-func (h *ItemsHandler) toItemResponse(item *domain.Item) *dto.ItemResponse {
-	return &dto.ItemResponse{
-		ID:        item.ID,
-		Name:      item.Name,
-		SKU:       item.SKU,
-		Quantity:  item.Quantity,
-		Price:     item.Price,
-		Category:  item.Category,
-		Location:  item.Location,
-		CreatedAt: item.CreatedAt,
-		UpdatedAt: item.UpdatedAt,
+func (h *ItemsHandler) writeError(c *gin.Context, err error) {
+	code := http.StatusInternalServerError
+	switch {
+	case errors.Is(err, customErr.ErrInvalidInput):
+		code = http.StatusBadRequest
+	case errors.Is(err, customErr.ErrItemNotFound):
+		code = http.StatusNotFound
+	case errors.Is(err, customErr.ErrForbidden):
+		code = http.StatusForbidden
+	case errors.Is(err, customErr.ErrDatabase):
+		code = http.StatusInternalServerError
+	case errors.Is(err, customErr.ErrInternal):
+		code = http.StatusInternalServerError
 	}
+	c.JSON(code, gin.H{"error": err.Error()})
 }
