@@ -1,138 +1,91 @@
 # Система управления складом Warehouse Control
 
-## Обзор
+**Warehouse Control** — мини-система для управления инвентарем с полным CRUD, аудитом через PostgreSQL-триггеры, ролевым доступом и JWT-аутентификацией через отдельный SSO-сервис (gRPC).  
 
-Warehouse Control — это мини-система для управления инвентарем на складе с операциями CRUD, логированием истории изменений, ролевым контролем доступа и аутентификацией через JWT, интегрированной с отдельным сервисом SSO (Single Sign-On). Система использует триггеры PostgreSQL для логирования изменений, демонстрируя антипаттерн в образовательных целях (не используйте в продакшене).
-
-Проект включает:
-- Бэкенд-сервис для управления складом (Go)
-- Сервис SSO для аутентификации (gRPC, Go)
-- Простой фронтенд (HTML/JS с Tailwind CSS)
-- Docker Compose для простого запуска
-
-## Функции
-
-- **Операции CRUD для товаров**:
-  - Создание, чтение, обновление, удаление товаров инвентаря (POST/GET/PUT/DELETE /items)
-- **История изменений**:
-  - Логирует все изменения (insert, update, delete) с помощью триггеров БД
-  - Просмотр истории по товару или с фильтрами
-  - Экспорт истории в CSV (генерируется на бэкенде)
-- **Ролевой доступ**:
-  - Admin: Полный доступ
-  - Manager: Просмотр и редактирование (CRUD)
-  - Viewer: Только просмотр
-- **Аутентификация**:
-  - JWT через сервис SSO
-  - Роль встроена в токен
-- **Фронтенд**:
-  - Форма входа
-  - Список товаров с добавлением/редактированием/удалением (в зависимости от роли)
-  - Просмотр истории по товару с базовым отображением diff
-  - Фильтры истории (дата, пользователь, действие)
-  - Кнопка экспорта CSV
-- **Дополнительно**:
-  - Базовый просмотр различий между версиями (сравнение полей по полям на фронтенде)
-  - Поиск и фильтрация истории
+**Особенности:**
+- Refresh tokens (долгоживущие токены обновления)
+- Rate limiting (токен-бакет)
+- Graceful shutdown
+- Автоматическое обновление токена на фронтенде
+- История изменений через триггеры (образовательный антипаттерн)
 
 ## Архитектура
 
-- **Бэкенд Warehouse Control**: Обработка API-запросов, бизнес-логика, взаимодействие с БД.
-- **Бэкенд SSO**: gRPC-сервис для аутентификации пользователей, регистрации, управления ролями.
-- **База данных**: PostgreSQL (отдельные БД для SSO и Warehouse).
-- **Фронтенд**: Статический HTML/JS, обслуживаемый бэкендом Warehouse.
+- **Warehouse Control** — REST API (Gin) + фронтенд (HTML/JS/Tailwind)
+- **SSO** — gRPC-сервис аутентификации
+- **БД** — PostgreSQL (отдельные БД: `warehouse_control` и `sso`)
+- **Фронтенд** — статический, обслуживается Warehouse
 
-## Заметки по рефакторингу
+## Функции
 
-- Завершено разбор истории из JSON в репозитории.
-- Улучшен экспорт CSV с добавлением дополнительных полей (name, sku, quantity, price).
-- Исправлен фронтенд для обработки ролей: скрытие кнопок для viewers, отображение пользователя/роли.
-- Добавлены модалы для добавления/редактирования товаров.
-- Реализована загрузка истории с фильтрами и базовый модал diff.
-- Добавлены скрипты инициализации БД для обоих сервисов.
-- Объединены Docker Compose для обоих сервисов.
-- Улучшена обработка ошибок и логирование.
-- Обеспечено захватывание имени пользователя триггерами через переменную сессии.
-- В аутентификации login разбор токена для возврата username/role в ответе для фронтенда.
+- CRUD товаров (с ролевыми ограничениями)
+- Полная история изменений (INSERT/UPDATE/DELETE) с diff
+- Экспорт истории в CSV (с фильтрами)
+- Роли: **Admin** / **Manager** / **Viewer**
+- JWT + Refresh tokens
+- Rate limiting + Prometheus метрики
+- Авто-обновление токена на фронтенде
 
 ## Установка
 
 ### Требования
-
 - Go 1.24+
-- Docker & Docker Compose
+- Docker + Docker Compose
+- Goose (для миграций)
 
-### Переменные окружения (.env)
-
-Скопируйте `.env.example` в `.env` и настройте
-
-### Запуск с Docker
-
-Сначала запустите инфраструктуру (Postgres):
+### 1. Клонирование и подготовка
 ```bash
-cd infrastructure && make run
-textЗатем SSO:
+git clone <repo>
+cd warehouse-control-project
+cp warehouse-control/.env.example warehouse-control/.env
+cp sso/.env.example sso/.env
+
+2. Запуск через Docker (рекомендуется)
+Bash# Запуск Postgres + Redis (если нужен)
+cd infrastructure && make run   # если есть отдельный infra
+
+# Запуск SSO
 cd sso && make run
-textЗатем Warehouse:
+
+# Запуск Warehouse
 cd warehouse-control && make run
-```
-
-- API Warehouse-control: http://localhost:8037
-- gRPC SSO: localhost:44044 (внутренний)
-
-### Локальный запуск
-
-1. Запустите Postgres локально или через Docker.
-2. Запустите SSO: `cd sso && go run .`
-3. Запустите Warehouse: `cd warehouse-control && go run .`
-4. Доступ к фронтенду: http://localhost:8037
-
-### Миграции БД
-Для SSO:
-```bash
-cd sso && make migrate-up
-```
-Для Warehouse:
-```bash
+3. Миграции
+Bashcd sso && make migrate-up
 cd warehouse-control && make migrate-up
-```
+4. Создание приложения и пользователей
+SQL-- В БД sso выполните:
+INSERT INTO apps (id, name, secret) 
+VALUES (1, 'warehouse', 'super_secret_jwt_key_change_in_production');
+Bash# Создание пользователей
+grpcurl -plaintext -d '{"username":"admin","password":"123","role":"admin","app_id":1}' localhost:44044 sso.Auth/Register
+grpcurl -plaintext -d '{"username":"manager","password":"123","role":"manager","app_id":1}' localhost:44044 sso.Auth/Register
+grpcurl -plaintext -d '{"username":"viewer","password":"123","role":"viewer","app_id":1}' localhost:44044 sso.Auth/Register
+Доступ
 
-### Пользователи по умолчанию
+Warehouse API + UI: http://localhost:8037
+SSO gRPC: localhost:44044
 
-Вставляются через миграции:
-- admin / 123 (admin)
-- manager / 123 (manager)
-- viewer / 123 (viewer)
+Эндпоинты API (Warehouse)
+Аутентификация
 
-Пароли хэшированы с bcrypt.
+POST /auth/login → {access_token, refresh_token, username, role, expires_at}
+POST /auth/refresh → {access_token, refresh_token}
 
-### Создание приложения (app) и пользователей с ролями
+Товары (требует access_token)
 
-После запуска SSO, создайте приложение (app) вручную в БД (поскольку нет gRPC метода для apps):
+GET /items?limit=10&offset=0&search=...
+POST /items (Manager/Admin)
+GET /items/:id
+PUT /items/:id (Manager/Admin)
+DELETE /items/:id (Manager/Admin)
+DELETE /items/bulk (только Admin)
 
-Подключитесь к Postgres и выполните:
-```sql
-INSERT INTO apps (id, name, secret) VALUES (1, 'warehouse', 'super_secret_jwt_key_change_in_production');
-```
+История
 
-Затем создайте пользователей с ролями через grpcurl (пароли будут хэшированы автоматически):
-```bash
-grpcurl -plaintext -d '{"username": "admin", "password": "123", "role": "admin", "app_id": 1}' localhost:44044 sso.Auth/Register
-grpcurl -plaintext -d '{"username": "manager", "password": "123", "role": "manager", "app_id": 1}' localhost:44044 sso.Auth/Register
-grpcurl -plaintext -d '{"username": "viewer", "password": "123", "role": "viewer", "app_id": 1}' l
-```
+GET /history?item_id=...&action=...&username=...&date_from=...&date_to=...
+GET /history/item/:id
+GET /history/export (CSV с фильтрами)
 
-### Эндпоинты API
-
-- **Аутентификация**:
-  - POST /auth/login {username, password} -> {token, username, role, expires_at}
-- **Товары**:
-  - GET /items
-  - POST /items (manager/admin)
-  - GET /items/{id}
-  - PUT /items/{id} (manager/admin)
-  - DELETE /items/{id} (manager/admin)
-- **История**:
-  - GET /history?item_id=...&action=...&username=...&date_from=...&date_to=...
-  - GET /history/item/{id}
-  - GET /history/export (CSV, с фильтрами)
+.env файлы
+warehouse-control/.env.example — см. выше в предыдущем сообщении.
+sso/.env.example — см. выше в предыдущем сообщении.

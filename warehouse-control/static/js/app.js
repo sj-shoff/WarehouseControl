@@ -1,263 +1,200 @@
-let token = localStorage.getItem('token');
-let role = localStorage.getItem('role');
-let currentLang = 'ru';
-
-const translations = {
-  ru: {
-    title: 'Warehouse Control',
-    login: 'Войти',
-    warehouse: 'Склад',
-    logout: 'Выход',
-    items: 'Товары',
-    history: 'История',
-    add_item: 'Добавить товар',
-    search: 'Поиск',
-    show_history: 'Показать историю',
-    export_csv: 'Экспорт CSV',
-    diff_view: 'Просмотр различий'
-  },
-  en: {
-    title: 'Warehouse Control',
-    login: 'Login',
-    warehouse: 'Warehouse',
-    logout: 'Logout',
-    items: 'Items',
-    history: 'History',
-    add_item: 'Add Item',
-    search: 'Search',
-    show_history: 'Show History',
-    export_csv: 'Export CSV',
-    diff_view: 'Diff View'
-  }
+const State = {
+    token: localStorage.getItem('token'),
+    role: localStorage.getItem('role'),
+    user: localStorage.getItem('username'),
+    lang: localStorage.getItem('lang') || 'ru',
 };
 
-function translate() {
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.getAttribute('data-i18n');
-    el.textContent = translations[currentLang][key] || key;
-  });
-}
+const HttpClient = {
+    async request(url, method = 'GET', body = null) {
+        this.setProgress(30); // Начало загрузки
+        
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${State.token}`
+            }
+        };
+        if (body) options.body = JSON.stringify(body);
 
-document.getElementById('lang-switch').addEventListener('change', (e) => {
-  currentLang = e.target.value;
-  translate();
-});
+        try {
+            const response = await fetch(url, options);
+            this.setProgress(70);
 
-const api = (url, method = 'GET', body = null) => {
-  const opts = {
-    method,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+            if (response.status === 401) Auth.logout();
+            
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Server error');
+            }
+
+            this.setProgress(100);
+            return await response.json();
+        } catch (err) {
+            this.setProgress(0);
+            this.showToast(err.message, 'error');
+            throw err;
+        } finally {
+            setTimeout(() => this.setProgress(0), 400);
+        }
+    },
+
+    setProgress(percent) {
+        const loader = document.getElementById('global-loader');
+        if (loader) {
+            loader.style.transform = `scaleX(${percent / 100})`;
+        }
+    },
+
+    showToast(msg, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-5 right-5 px-6 py-3 rounded-2xl shadow-2xl text-white transition-all transform translate-y-20 z-[200] ${
+            type === 'error' ? 'bg-red-500' : 'bg-emerald-500'
+        }`;
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.classList.remove('translate-y-20'), 100);
+        setTimeout(() => {
+            toast.classList.add('translate-y-20');
+            setTimeout(() => toast.remove(), 500);
+        }, 3000);
     }
-  };
-  if (body) opts.body = JSON.stringify(body);
-  return fetch(url, opts);
 };
 
-async function login() {
-  const username = document.getElementById('username').value;
-  const password = document.getElementById('password').value;
-  const res = await fetch('/auth/login', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({username, password})
-  });
-  if (res.ok) {
-    const data = await res.json();
-    token = data.token;
-    role = data.role;
-    localStorage.setItem('token', token);
-    localStorage.setItem('role', role);
-    document.getElementById('login').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
-    document.getElementById('current-user').textContent = `${data.username} (${data.role})`;
-    toggleButtonsByRole();
-    loadItems();
-    translate();
-  } else {
-    alert('Ошибка входа');
-  }
-}
+const UI = {
+    switchTab(index) {
+        document.querySelectorAll('.tab').forEach((tab, i) => {
+            if (i === index) {
+                tab.classList.add('active', 'text-blue-600');
+                tab.classList.remove('text-slate-500');
+            } else {
+                tab.classList.remove('active', 'text-blue-600');
+                tab.classList.add('text-slate-500');
+            }
+        });
 
-function logout() {
-  localStorage.removeItem('token');
-  localStorage.removeItem('role');
-  location.reload();
-}
+        document.getElementById('tab-0').classList.toggle('hidden', index !== 0);
+        document.getElementById('tab-1').classList.toggle('hidden', index !== 1);
+        
+        if (index === 1) App.loadHistory();
+    },
 
-function toggleButtonsByRole() {
-  if (role === 'viewer') {
-    document.getElementById('add-btn').style.display = 'none';
-  } else {
-    document.getElementById('add-btn').style.display = 'flex';
-  }
-}
+    showModal(id) {
+        const modal = document.getElementById(id);
+        modal.classList.remove('hidden');
+        setTimeout(() => modal.querySelector('.bg-white').classList.remove('scale-95'), 10);
+    },
 
-let currentItemId = null;
-
-function showAddModal() {
-  currentItemId = null;
-  document.getElementById('modal-title').textContent = 'Add Item';
-  clearModalFields();
-  document.getElementById('item-modal').classList.remove('hidden');
-}
-
-function showEditModal(item) {
-  currentItemId = item.id;
-  document.getElementById('modal-title').textContent = 'Edit Item';
-  document.getElementById('item-name').value = item.name;
-  document.getElementById('item-sku').value = item.sku;
-  document.getElementById('item-quantity').value = item.quantity;
-  document.getElementById('item-price').value = item.price;
-  document.getElementById('item-category').value = item.category;
-  document.getElementById('item-location').value = item.location;
-  document.getElementById('item-modal').classList.remove('hidden');
-}
-
-function clearModalFields() {
-  document.getElementById('item-name').value = '';
-  document.getElementById('item-sku').value = '';
-  document.getElementById('item-quantity').value = '';
-  document.getElementById('item-price').value = '';
-  document.getElementById('item-category').value = '';
-  document.getElementById('item-location').value = '';
-}
-
-async function saveItem() {
-  const item = {
-    name: document.getElementById('item-name').value,
-    sku: document.getElementById('item-sku').value,
-    quantity: parseInt(document.getElementById('item-quantity').value),
-    price: parseFloat(document.getElementById('item-price').value),
-    category: document.getElementById('item-category').value,
-    location: document.getElementById('item-location').value
-  };
-  let res;
-  if (currentItemId) {
-    res = await api(`/items/${currentItemId}`, 'PUT', item);
-  } else {
-    res = await api('/items', 'POST', item);
-  }
-  if (res.ok) {
-    closeModal();
-    loadItems();
-  } else {
-    alert('Error saving item');
-  }
-}
-
-function closeModal() {
-  document.getElementById('item-modal').classList.add('hidden');
-}
-
-async function loadItems(page = 0) {
-  const limit = 10;
-  const offset = page * limit;
-  const search = document.getElementById('search-items').value;
-  let url = `/items?limit=${limit}&offset=${offset}`;
-  if (search) url += `&search=${search}`;
-  const res = await api(url);
-  const data = await res.json();
-  let html = `<table class="w-full"><thead><tr class="bg-gray-100"><th class="p-4 text-left">ID</th><th class="p-4 text-left">Name</th><th class="p-4 text-left">SKU</th><th class="p-4 text-left">Quantity</th><th class="p-4 text-left">Price</th><th class="p-4 text-left">Actions</th></tr></thead><tbody>`;
-  data.items.forEach(item => {
-    html += `<tr class="border-b"><td class="p-4">${item.id}</td><td class="p-4">${item.name}</td><td class="p-4">${item.sku}</td><td class="p-4">${item.quantity}</td><td class="p-4">${item.price}</td><td class="p-4">`;
-    if (role !== 'viewer') {
-      html += `<button onclick="showEditModal(${JSON.stringify(item)})" class="text-blue-600 mr-2">Edit</button><button onclick="deleteItem(${item.id})" class="text-red-600">Delete</button>`;
+    closeModal(id) {
+        const modal = document.getElementById(id);
+        modal.querySelector('.bg-white').classList.add('scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 200);
     }
-    html += `</td></tr>`;
-  });
-  html += `</tbody></table>`;
-  document.getElementById('items-table').innerHTML = html;
-  renderPagination('items-pagination', data.total, limit, page, loadItems);
-}
+};
 
-function renderPagination(id, total, limit, currentPage, loadFunc) {
-  const pages = Math.ceil(total / limit);
-  let html = '';
-  for (let i = 0; i < pages; i++) {
-    html += `<button onclick="${loadFunc.name}(${i})" class="px-4 py-2 ${i === currentPage ? 'bg-blue-600 text-white' : 'bg-gray-200'} rounded mx-1">${i+1}</button>`;
-  }
-  document.getElementById(id).innerHTML = html;
-}
+const Auth = {
+    async login() {
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        try {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const data = await HttpClient.request('/auth/login', 'POST', { username, password });
+            
+            State.token = data.token;
+            State.role = data.role;
+            State.user = data.username;
+            
+            localStorage.setItem('token', State.token);
+            localStorage.setItem('role', State.role);
+            localStorage.setItem('username', State.user);
 
-async function deleteItem(id) {
-  if (confirm('Delete item?')) {
-    await api(`/items/${id}`, 'DELETE');
-    loadItems();
-  }
-}
+            this.initApp();
+        } catch (e) {
+            btn.innerHTML = originalText;
+        }
+    },
 
-async function bulkDelete(ids) {
-  if (confirm('Delete selected items?')) {
-    await api('/items/bulk', 'DELETE', {ids});
-    loadItems();
-  }
-}
+    logout() {
+        localStorage.clear();
+        location.reload();
+    },
 
-async function loadHistory(page = 0) {
-  const limit = 10;
-  const offset = page * limit;
-  let url = '/history?limit=' + limit + '&offset=' + offset;
-  const itemId = document.getElementById('history-item-id').value;
-  const action = document.getElementById('history-action').value;
-  const username = document.getElementById('history-username').value;
-  const dateFrom = document.getElementById('history-date-from').value;
-  const dateTo = document.getElementById('history-date-to').value;
-  if (itemId) url += '&item_id=' + itemId;
-  if (action) url += '&action=' + action;
-  if (username) url += '&username=' + username;
-  if (dateFrom) url += '&date_from=' + dateFrom + 'T00:00:00Z';
-  if (dateTo) url += '&date_to=' + dateTo + 'T23:59:59Z';
-  const res = await api(url);
-  const data = await res.json();
-  let html = `<table class="w-full"><thead><tr class="bg-gray-100"><th class="p-4 text-left">ID</th><th class="p-4 text-left">Item ID</th><th class="p-4 text-left">Action</th><th class="p-4 text-left">Changed By</th><th class="p-4 text-left">Changed At</th><th class="p-4 text-left">Actions</th></tr></thead><tbody>`;
-  data.records.forEach(rec => {
-    html += `<tr class="border-b"><td class="p-4">${rec.id}</td><td class="p-4">${rec.item_id}</td><td class="p-4">${rec.action}</td><td class="p-4">${rec.changed_by}</td><td class="p-4">${new Date(rec.changed_at).toLocaleString()}</td><td class="p-4"><button onclick="showDiff(${JSON.stringify(rec)})" class="text-blue-600">Diff</button></td></tr>`;
-  });
-  html += `</tbody></table>`;
-  document.getElementById('history-table').innerHTML = html;
-  renderPagination('history-pagination', data.total, limit, page, loadHistory);
-}
+    initApp() {
+        document.getElementById('login').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        document.getElementById('user-profile').classList.remove('hidden');
+        document.getElementById('current-user').textContent = `${State.user} (${State.role})`;
+        
+        App.loadItems();
+        if (State.role === 'viewer') {
+            document.getElementById('add-btn').style.display = 'none';
+        }
+    }
+};
 
-function showDiff(rec) {
-  const oldData = rec.old_data ? JSON.stringify(rec.old_data, null, 2) : '';
-  const newData = rec.new_data ? JSON.stringify(rec.new_data, null, 2) : '';
-  const diff = Diff.diffLines(oldData, newData);
-  let html = '';
-  diff.forEach(part => {
-    const color = part.added ? 'green' : part.removed ? 'red' : 'gray';
-    html += `<span style="color: ${color};">${part.value}</span>`;
-  });
-  document.getElementById('diff-content').innerHTML = html;
-  document.getElementById('diff-modal').classList.remove('hidden');
-}
+const App = {
+    async loadItems() {
+        const table = document.getElementById('items-table');
+        // Показываем шиммер (скелетон) перед загрузкой
+        table.innerHTML = '<div class="p-10 space-y-4"><div class="h-8 bg-slate-100 rounded loading-shimmer"></div><div class="h-8 bg-slate-100 rounded loading-shimmer"></div></div>';
+        
+        const search = document.getElementById('search-items').value;
+        const url = `/api/items?limit=10&offset=0${search ? `&search=${search}` : ''}`;
+        
+        try {
+            const data = await HttpClient.request(url);
+            this.renderItems(data.items);
+        } catch (e) {}
+    },
 
-function closeDiffModal() {
-  document.getElementById('diff-modal').classList.add('hidden');
-}
+    renderItems(items) {
+        const table = document.getElementById('items-table');
+        if (!items.length) {
+            table.innerHTML = '<div class="p-20 text-center text-slate-400">Inventory is empty</div>';
+            return;
+        }
 
-async function exportCSV() {
-  const res = await api('/history/export');
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'history.csv';
-  a.click();
-}
+        let html = `
+            <table class="w-full">
+                <thead class="bg-slate-50 border-b border-slate-100">
+                    <tr>
+                        <th class="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-left">Product</th>
+                        <th class="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-left">SKU</th>
+                        <th class="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-left">Quantity</th>
+                        <th class="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                    ${items.map(item => `
+                        <tr class="hover:bg-slate-50/50 transition-colors">
+                            <td class="p-4">
+                                <div class="font-bold text-slate-700">${item.name}</div>
+                                <div class="text-xs text-slate-400">${item.category}</div>
+                            </td>
+                            <td class="p-4 font-mono text-sm">${item.sku}</td>
+                            <td class="p-4">
+                                <span class="px-3 py-1 rounded-full text-xs font-bold ${item.quantity < 10 ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600'}">
+                                    ${item.quantity} units
+                                </span>
+                            </td>
+                            <td class="p-4 text-right space-x-2">
+                                ${State.role !== 'viewer' ? `
+                                    <button onclick="App.editItem(${item.id})" class="text-slate-400 hover:text-blue-600"><i class="fas fa-edit"></i></button>
+                                    <button onclick="App.deleteItem(${item.id})" class="text-slate-400 hover:text-red-500"><i class="fas fa-trash"></i></button>
+                                ` : ''}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        table.innerHTML = html;
+    }
+};
 
-function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-  document.querySelectorAll('[id^=tab-]').forEach(d => d.classList.add('hidden'));
-  document.getElementById(`tab-${tab}`).classList.remove('hidden');
-}
-
-if (token) {
-  document.getElementById('login').classList.add('hidden');
-  document.getElementById('app').classList.remove('hidden');
-  toggleButtonsByRole();
-  loadItems();
-  translate();
-}
+if (State.token) Auth.initApp();

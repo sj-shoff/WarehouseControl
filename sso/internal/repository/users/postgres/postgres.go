@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"sso/internal/domain"
 	customErr "sso/internal/domain/errors"
@@ -37,6 +38,26 @@ func (r *UsersPostgresRepository) GetUserByUsername(ctx context.Context, usernam
 			return nil, customErr.ErrUserNotFound
 		}
 		return nil, fmt.Errorf("%w: scan user error: %v", customErr.ErrDatabase, err)
+	}
+
+	return user, nil
+}
+
+func (r *UsersPostgresRepository) GetUserByID(ctx context.Context, id int64) (*domain.User, error) {
+	query := `SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE id = $1`
+
+	row, err := r.db.QueryRowWithRetry(ctx, r.retries, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("%w: query user by id error: %v", customErr.ErrDatabase, err)
+	}
+
+	user := &domain.User{}
+	err = row.Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, customErr.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("%w: scan user by id error: %v", customErr.ErrDatabase, err)
 	}
 
 	return user, nil
@@ -102,6 +123,59 @@ func (r *UsersPostgresRepository) UpdateUserRole(ctx context.Context, userID int
 
 	if rows == 0 {
 		return customErr.ErrUserNotFound
+	}
+
+	return nil
+}
+
+func (r *UsersPostgresRepository) SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, appID int, expiresAt time.Time) error {
+	query := `INSERT INTO refresh_tokens (user_id, token_hash, app_id, expires_at) VALUES ($1, $2, $3, $4)`
+
+	_, err := r.db.ExecWithRetry(ctx, r.retries, query, userID, tokenHash, appID, expiresAt)
+	if err != nil {
+		return fmt.Errorf("%w: save refresh token failed: %v", customErr.ErrDatabase, err)
+	}
+
+	return nil
+}
+
+func (r *UsersPostgresRepository) GetRefreshToken(ctx context.Context, tokenHash string) (int64, int, time.Time, error) {
+	query := `SELECT user_id, app_id, expires_at FROM refresh_tokens WHERE token_hash = $1`
+
+	row, err := r.db.QueryRowWithRetry(ctx, r.retries, query, tokenHash)
+	if err != nil {
+		return 0, 0, time.Time{}, fmt.Errorf("%w: query refresh token failed: %v", customErr.ErrDatabase, err)
+	}
+
+	var userID int64
+	var appID int
+	var expiresAt time.Time
+
+	if err := row.Scan(&userID, &appID, &expiresAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, 0, time.Time{}, customErr.ErrInvalidCredentials
+		}
+		return 0, 0, time.Time{}, fmt.Errorf("%w: scan refresh token failed: %v", customErr.ErrDatabase, err)
+	}
+
+	return userID, appID, expiresAt, nil
+}
+
+func (r *UsersPostgresRepository) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
+	query := `DELETE FROM refresh_tokens WHERE token_hash = $1`
+
+	res, err := r.db.ExecWithRetry(ctx, r.retries, query, tokenHash)
+	if err != nil {
+		return fmt.Errorf("%w: delete refresh token failed: %v", customErr.ErrDatabase, err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%w: rows affected error on delete: %v", customErr.ErrDatabase, err)
+	}
+
+	if rows == 0 {
+		return nil
 	}
 
 	return nil

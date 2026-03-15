@@ -9,5 +9,5 @@ var (
 	ErrInvalidInput       = errors.New("invalid input")
 	ErrDatabase           = errors.New("database error")
 	ErrInternal           = errors.New("internal error")
-	ErrTokenInvalid       = errors.New("token invalid")
+	ErrInvalidToken       = errors.New("invalid token")
 )

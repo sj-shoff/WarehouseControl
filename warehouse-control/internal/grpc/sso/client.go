@@ -22,25 +22,43 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dial sso: %w", err)
 	}
+
 	return &Client{
 		authClient: ssov1.NewAuthClient(conn),
 		conn:       conn,
+		cfg:        cfg,
 	}, nil
 }
 
 func (c *Client) Close() error { return c.conn.Close() }
 
-func (c *Client) Login(ctx context.Context, username, password string) (string, error) {
+func (c *Client) Login(ctx context.Context, username, password string) (string, string, int64, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.cfg.SSO.ClientTimeout)
 	defer cancel()
 
 	resp, err := c.authClient.Login(ctx, &ssov1.LoginRequest{
 		Username: username,
 		Password: password,
-		AppId:    1,
+		AppId:    c.cfg.SSO.AppID,
 	})
 	if err != nil {
-		return "", fmt.Errorf("sso login: %w", err)
+		return "", "", 0, fmt.Errorf("sso login: %w", err)
 	}
-	return resp.GetToken(), nil
+
+	return resp.GetAccessToken(), resp.GetRefreshToken(), resp.GetExpiresAt(), nil
+}
+
+func (c *Client) Refresh(ctx context.Context, refreshToken string) (string, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.cfg.SSO.ClientTimeout)
+	defer cancel()
+
+	resp, err := c.authClient.Refresh(ctx, &ssov1.RefreshRequest{
+		RefreshToken: refreshToken,
+		AppId:        1,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("sso refresh: %w", err)
+	}
+
+	return resp.GetAccessToken(), resp.GetRefreshToken(), nil
 }

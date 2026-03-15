@@ -1,56 +1,36 @@
 package jwt
 
 import (
-	"sso/internal/domain"
-	customErr "sso/internal/domain/errors"
+	"fmt"
 	"time"
+
+	"sso/internal/domain"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type Claims struct {
-	UserID   int64           `json:"user_id"`
-	Username string          `json:"username"`
-	Role     domain.UserRole `json:"role"`
 	jwt.RegisteredClaims
+	UID      int64  `json:"uid"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	AppID    int    `json:"app_id"`
 }
 
 func NewToken(user *domain.User, secret string, duration time.Duration) (string, error) {
-	claims := Claims{
-		UserID:   user.ID,
-		Username: user.Username,
-		Role:     user.Role,
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
-	}
+		UID:      user.ID,
+		Username: user.Username,
+		Role:     string(user.Role),
+	})
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(secret))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("sign token: %w", err)
 	}
 
 	return tokenString, nil
-}
-
-func ValidateToken(tokenString, secret string) (*domain.UserClaim, error) {
-	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, customErr.ErrTokenInvalid
-		}
-		return []byte(secret), nil
-	})
-
-	if err != nil || !token.Valid {
-		return nil, customErr.ErrTokenInvalid
-	}
-
-	return &domain.UserClaim{
-		UserID:   claims.UserID,
-		Username: claims.Username,
-		Role:     claims.Role,
-	}, nil
 }

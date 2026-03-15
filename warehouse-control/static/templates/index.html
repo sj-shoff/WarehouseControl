@@ -1,99 +1,161 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="h-full">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Warehouse Control</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/jsdiff@5.2.0/dist/diff.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Control | Enterprise Inventory</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/jsdiff@5.2.0/dist/diff.min.js"></script>
+    
+    <style>
+        /* Senior Touch: Smooth transitions & Custom Scrollbar */
+        .tab.active { border-bottom: 3px solid #2563eb; color: #2563eb; }
+        .loading-shimmer {
+            background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
 </head>
-<body class="bg-gray-50">
-  <div class="max-w-7xl mx-auto p-6">
-    <!-- Language Switch -->
-    <div class="flex justify-end mb-4">
-      <select id="lang-switch" class="border p-2 rounded">
-        <option value="ru">Русский</option>
-        <option value="en">English</option>
-      </select>
+<body class="bg-slate-50 text-slate-900 h-full font-sans">
+
+    <div id="global-loader" class="fixed top-0 left-0 w-full h-1 bg-blue-600 z-[100] transition-transform scale-x-0 origin-left"></div>
+
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
+        
+        <header class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-2 rounded-lg text-white">
+                    <i class="fas fa-boxes-stacked fa-xl"></i>
+                </div>
+                <h1 class="text-2xl font-extrabold tracking-tight text-slate-800 uppercase" data-i18n="title">
+                    Warehouse Control
+                </h1>
+            </div>
+
+            <div class="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
+                <select id="lang-switch" class="bg-transparent font-medium text-sm focus:outline-none px-2 cursor-pointer">
+                    <option value="ru">RU</option>
+                    <option value="en">EN</option>
+                </select>
+                <div class="h-6 w-px bg-slate-200"></div>
+                <div id="user-profile" class="hidden flex items-center gap-3 px-2">
+                    <span id="current-user" class="text-sm font-semibold text-slate-600"></span>
+                    <button onclick="Auth.logout()" class="text-slate-400 hover:text-red-600 transition-colors">
+                        <i class="fas fa-power-off"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <section id="login" class="max-w-md mx-auto mt-20 transition-all duration-500">
+                <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-8 md:p-12 text-center">
+                    <h2 class="text-3xl font-bold mb-2">Welcome Back</h2>
+                    <p class="text-slate-500 mb-8">Please enter your credentials to manage inventory</p>
+                    
+                    <div class="space-y-4">
+                        <div class="relative">
+                            <i class="fas fa-user absolute left-4 top-4 text-slate-400"></i>
+                            <input id="username" type="text" placeholder="Username" 
+                                class="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                        </div>
+                        <div class="relative">
+                            <i class="fas fa-lock absolute left-4 top-4 text-slate-400"></i>
+                            <input id="password" type="password" placeholder="Password" 
+                                class="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                        </div>
+                        <button onclick="Auth.login()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98]">
+                            <span data-i18n="login">Sign In</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="app" class="hidden space-y-6">
+                
+                <nav class="flex gap-1 bg-white p-1 rounded-2xl shadow-sm border border-slate-200 w-fit">
+                    <button onclick="UI.switchTab(0)" class="tab active px-6 py-2.5 rounded-xl text-sm font-bold transition-all" data-i18n="items">Items</button>
+                    <button onclick="UI.switchTab(1)" class="tab px-6 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-500" data-i18n="history">History</button>
+                </nav>
+
+                <div id="tab-0" class="space-y-4">
+                    <div class="flex flex-wrap gap-4 items-center justify-between">
+                        <div class="flex gap-2">
+                            <button id="add-btn" onclick="App.showAddModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-2xl flex items-center gap-2 font-bold transition-all">
+                                <i class="fas fa-plus-circle"></i> <span data-i18n="add_item">Add New</span>
+                            </button>
+                        </div>
+                        
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <div class="relative flex-1">
+                                <i class="fas fa-search absolute left-4 top-3.5 text-slate-400"></i>
+                                <input id="search-items" onkeyup="if(event.key==='Enter') App.loadItems()" placeholder="Search by name or SKU..." 
+                                    class="w-full md:w-80 pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <button onclick="App.loadItems()" class="bg-slate-800 text-white px-6 py-3 rounded-2xl font-bold hover:bg-slate-900 transition-all">
+                                <i class="fas fa-filter mr-2"></i> <span data-i18 i18n="search">Apply</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden" id="items-table">
+                        <div class="p-8 space-y-4">
+                            <div class="h-8 w-full loading-shimmer rounded"></div>
+                            <div class="h-8 w-full loading-shimmer rounded"></div>
+                            <div class="h-8 w-full loading-shimmer rounded"></div>
+                        </div>
+                    </div>
+                    <div id="items-pagination" class="flex justify-center gap-2 pb-10"></div>
+                </div>
+
+                <div id="tab-1" class="hidden space-y-4">
+                    <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        <input id="history-item-id" placeholder="Item ID" class="bg-slate-50 border-none p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500">
+                        <input id="history-action" placeholder="Action" class="bg-slate-50 border-none p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500">
+                        <input id="history-username" placeholder="Username" class="bg-slate-50 border-none p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500">
+                        <input id="history-date-from" type="date" class="bg-slate-50 border-none p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500">
+                        <input id="history-date-to" type="date" class="bg-slate-50 border-none p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500">
+                        <button onclick="App.loadHistory()" class="bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all" data-i18n="show_history">Filter</button>
+                    </div>
+                    <div class="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden" id="history-table"></div>
+                    <div id="history-pagination" class="flex justify-center gap-2"></div>
+                </div>
+            </section>
+        </main>
     </div>
-    <!-- Login Screen -->
-    <div id="login" class="max-w-md mx-auto mt-32">
-      <div class="bg-white rounded-3xl shadow-2xl p-10">
-        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800" data-i18n="title">Warehouse Control</h1>
-        <input id="username" type="text" placeholder="Логин" class="w-full p-4 border border-gray-300 rounded-2xl mb-4 focus:outline-none focus:border-blue-500">
-        <input id="password" type="password" placeholder="Пароль" class="w-full p-4 border border-gray-300 rounded-2xl mb-6 focus:outline-none focus:border-blue-500">
-        <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-2xl transition" data-i18n="login">Войти</button>
-      </div>
-    </div>
-    <!-- Main App -->
-    <div id="app" class="hidden">
-      <div class="flex justify-between items-center mb-8">
-        <h1 class="text-3xl font-bold" data-i18n="warehouse">Склад</h1>
-        <div class="flex items-center gap-6">
-          <span id="current-user" class="font-medium text-gray-700"></span>
-          <button onclick="logout()" class="text-red-600 hover:text-red-700 flex items-center gap-2">
-            <i class="fas fa-sign-out-alt"></i> <span data-i18n="logout">Выход</span>
-          </button>
+
+    <div id="item-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+        <div class="bg-white rounded-[2.5rem] p-8 md:p-10 w-full max-w-lg relative shadow-2xl scale-95 transition-transform">
+            <h2 id="modal-title" class="text-2xl font-bold mb-6">Edit Product</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2">
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Product Name</label>
+                    <input id="item-name" class="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">SKU Code</label>
+                    <input id="item-sku" class="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Quantity</label>
+                    <input id="item-quantity" type="number" class="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none">
+                </div>
+                </div>
+            <div class="flex gap-3 mt-8">
+                <button onclick="App.saveItem()" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all">Confirm Changes</button>
+                <button onclick="UI.closeModal('item-modal')" class="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+            </div>
         </div>
-      </div>
-      <!-- Tabs -->
-      <div class="flex border-b mb-6">
-        <button onclick="switchTab(0)" class="tab active px-8 py-4 font-medium" data-tab="0" data-i18n="items">Товары</button>
-        <button onclick="switchTab(1)" class="tab px-8 py-4 font-medium" data-tab="1" data-i18n="history">История</button>
-      </div>
-      <!-- Items Tab -->
-      <div id="tab-0">
-        <div class="flex gap-4 mb-6">
-          <button id="add-btn" onclick="showAddModal()" class="bg-green-600 text-white px-6 py-3 rounded-2xl flex items-center gap-2">
-            <i class="fas fa-plus"></i> <span data-i18n="add_item">Добавить товар</span>
-          </button>
-          <input id="search-items" placeholder="Поиск по имени/SKU" class="border p-3 rounded-2xl w-64">
-          <button onclick="loadItems()" class="bg-blue-600 text-white px-4 py-3 rounded-2xl" data-i18n="search">Поиск</button>
-        </div>
-        <div class="bg-white rounded-3xl shadow overflow-hidden" id="items-table"></div>
-        <div class="flex justify-center mt-4" id="items-pagination"></div>
-      </div>
-      <!-- History Tab -->
-      <div id="tab-1" class="hidden">
-        <div class="bg-white p-6 rounded-3xl shadow mb-6 flex gap-4">
-          <input id="history-item-id" placeholder="ID товара" class="border p-3 rounded-2xl w-40">
-          <input id="history-action" placeholder="Action" class="border p-3 rounded-2xl w-40">
-          <input id="history-username" placeholder="Username" class="border p-3 rounded-2xl w-40">
-          <input id="history-date-from" type="date" class="border p-3 rounded-2xl w-40">
-          <input id="history-date-to" type="date" class="border p-3 rounded-2xl w-40">
-          <button onclick="loadHistory()" class="bg-blue-600 text-white px-8 rounded-2xl" data-i18n="show_history">Показать историю</button>
-          <button onclick="exportCSV()" class="bg-orange-600 text-white px-8 rounded-2xl" data-i18n="export_csv">Экспорт CSV</button>
-        </div>
-        <div class="bg-white rounded-3xl shadow overflow-hidden" id="history-table"></div>
-        <div class="flex justify-center mt-4" id="history-pagination"></div>
-      </div>
     </div>
-    <!-- Add/Edit Modal -->
-    <div id="item-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div class="bg-white p-8 rounded-2xl w-96">
-        <h2 id="modal-title" class="text-2xl mb-4"></h2>
-        <input id="item-name" placeholder="Name" class="w-full border p-2 mb-2">
-        <input id="item-sku" placeholder="SKU" class="w-full border p-2 mb-2">
-        <input id="item-quantity" type="number" placeholder="Quantity" class="w-full border p-2 mb-2">
-        <input id="item-price" type="number" step="0.01" placeholder="Price" class="w-full border p-2 mb-2">
-        <input id="item-category" placeholder="Category" class="w-full border p-2 mb-2">
-        <input id="item-location" placeholder="Location" class="w-full border p-2 mb-4">
-        <div class="flex gap-4">
-          <button onclick="saveItem()" class="bg-green-600 text-white px-4 py-2 rounded">Save</button>
-          <button onclick="closeModal()" class="bg-red-600 text-white px-4 py-2 rounded">Cancel</button>
-        </div>
-      </div>
-    </div>
-    <!-- Diff Modal -->
-    <div id="diff-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div class="bg-white p-8 rounded-2xl w-3/4 max-h-3/4 overflow-auto">
-        <h2 class="text-2xl mb-4" data-i18n="diff_view">Diff View</h2>
-        <pre id="diff-content" class="whitespace-pre-wrap"></pre>
-        <button onclick="closeDiffModal()" class="bg-red-600 text-white px-4 py-2 rounded mt-4">Close</button>
-      </div>
-    </div>
-  </div>
-  <script src="/static/js/app.js"></script>
+
+    <script src="/static/js/app.js"></script>
 </body>
 </html>

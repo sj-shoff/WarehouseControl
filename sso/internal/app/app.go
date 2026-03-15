@@ -43,7 +43,7 @@ func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
 	appsRepo := appsRepository.NewPostgresRepository(db, retries)
 
 	appsUc := appsUsecase.NewAppUsecase(appsRepo, logger)
-	authUc := authUsecase.NewAuthUsecase(userRepo, appsUc, logger, cfg.JWT.Secret, cfg.JWT.TokenTTL)
+	authUc := authUsecase.NewAuthUsecase(userRepo, appsUc, logger, cfg.JWT.Secret, cfg.JWT.AccessTokenTTL, cfg.JWT.RefreshTokenTTL)
 
 	grpcServer := grpc.NewServer()
 	authgrpc.Register(grpcServer, authUc)

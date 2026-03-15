@@ -28,7 +28,7 @@ func (s *serverAPI) Login(ctx context.Context, in *ssov1.LoginRequest) (*ssov1.L
 		return nil, err
 	}
 
-	_, token, _, err := s.auth.Login(ctx, in.GetUsername(), in.GetPassword(), int(in.GetAppId()))
+	claim, access, refresh, expiresAt, err := s.auth.Login(ctx, in.GetUsername(), in.GetPassword(), int(in.GetAppId()))
 	if err != nil {
 		if errors.Is(err, customErr.ErrInvalidCredentials) {
 			return nil, status.Error(codes.Unauthenticated, customErr.ErrInvalidCredentials.Error())
@@ -36,7 +36,32 @@ func (s *serverAPI) Login(ctx context.Context, in *ssov1.LoginRequest) (*ssov1.L
 		return nil, status.Error(codes.Internal, customErr.ErrInternal.Error())
 	}
 
-	return &ssov1.LoginResponse{Token: token}, nil
+	return &ssov1.LoginResponse{
+		AccessToken:  access,
+		RefreshToken: refresh,
+		Username:     claim.Username,
+		Role:         string(claim.Role),
+		ExpiresAt:    expiresAt.Unix(),
+	}, nil
+}
+
+func (s *serverAPI) Refresh(ctx context.Context, in *ssov1.RefreshRequest) (*ssov1.RefreshResponse, error) {
+	if in.GetRefreshToken() == "" || in.GetAppId() <= 0 {
+		return nil, status.Error(codes.InvalidArgument, customErr.ErrInvalidInput.Error())
+	}
+
+	access, refresh, err := s.auth.Refresh(ctx, in.GetRefreshToken(), int(in.GetAppId()))
+	if err != nil {
+		if errors.Is(err, customErr.ErrInvalidCredentials) {
+			return nil, status.Error(codes.Unauthenticated, customErr.ErrInvalidCredentials.Error())
+		}
+		return nil, status.Error(codes.Internal, customErr.ErrInternal.Error())
+	}
+
+	return &ssov1.RefreshResponse{
+		AccessToken:  access,
+		RefreshToken: refresh,
+	}, nil
 }
 
 func (s *serverAPI) Register(ctx context.Context, in *ssov1.RegisterRequest) (*ssov1.RegisterResponse, error) {

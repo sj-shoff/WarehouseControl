@@ -25,8 +25,9 @@ type Config struct {
 		Timeout time.Duration `env:"GRPC_TIMEOUT" env-default:"10s"`
 	}
 	JWT struct {
-		Secret   string        `env:"JWT_SECRET" validate:"required"`
-		TokenTTL time.Duration `env:"JWT_TOKEN_TTL" env-default:"24h"`
+		Secret          string        `env:"JWT_SECRET" validate:"required"`
+		AccessTokenTTL  time.Duration `env:"JWT_TOKEN_TTL" env-default:"24h"`
+		RefreshTokenTTL time.Duration `yaml:"refresh_token_ttl" env-default:"720h"`
 	}
 	Retries struct {
 		Attempts int     `env:"RETRIES_ATTEMPTS" validate:"required"`

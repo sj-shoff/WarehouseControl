@@ -28,11 +28,12 @@ type Config struct {
 		ShutdownTimeout time.Duration `env:"SERVER_SHUTDOWN_TIMEOUT" validate:"required"`
 	}
 	JWT struct {
-		Secret   string    `env:"JWT_SECRET" validate:"required"`
-		ExpHours time.Time `env:"JWT_EXP_HOURS" validate:"required"`
+		Secret   string        `env:"JWT_SECRET" validate:"required"`
+		TokenTTL time.Duration `env:"JWT_TOKEN_TTL" env-default:"24h"`
 	}
 	SSO struct {
 		GRPCAddr      string        `env:"SSO_GRPC_ADDR" validate:"required"`
+		AppID         int32         `env:"SSO_APP_ID" validate:"required"`
 		ClientTimeout time.Duration `env:"SSO_CLIENT_TIMEOUT" validate:"required"`
 	}
 	Retries struct {

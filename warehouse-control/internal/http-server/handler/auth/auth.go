@@ -25,17 +25,40 @@ func NewHandler(ssoClient *sso.Client, config *config.Config, logger *zlog.Zerol
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": customErr.ErrInvalidInput})
+		c.JSON(http.StatusBadRequest, gin.H{"error": customErr.ErrInvalidInput.Error()})
 		return
 	}
-	token, err := h.ssoClient.Login(c.Request.Context(), req.Username, req.Password)
+
+	accessToken, refreshToken, expiresAt, err := h.ssoClient.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrInvalidCredentials})
+		h.logger.Warn().Err(err).Str("username", req.Username).Msg("login failed")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrInvalidCredentials.Error()})
 		return
 	}
-	resp := dto.LoginResponse{
-		Token:     token,
-		ExpiresAt: h.config.JWT.ExpHours,
+
+	c.JSON(http.StatusOK, dto.LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresAt:    expiresAt,
+	})
+}
+
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var req dto.RefreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": customErr.ErrInvalidInput.Error()})
+		return
 	}
-	c.JSON(http.StatusOK, resp)
+
+	newAccess, newRefresh, err := h.ssoClient.Refresh(c.Request.Context(), req.RefreshToken)
+	if err != nil {
+		h.logger.Warn().Err(err).Msg("refresh failed")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  newAccess,
+		"refresh_token": newRefresh,
+	})
 }

@@ -46,7 +46,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/rs/zerolog v1.30.0 // indirect
-	github.com/sj-shoff/sso_proto v0.0.1
+	github.com/sj-shoff/sso_proto v1.0.2
 	golang.org/x/sys v0.39.0 // indirect
 	google.golang.org/grpc v1.79.1
 )

@@ -1,4 +1,4 @@
-.PHONY: run build migrate-up migrate-down docker-up docker-down
+.PHONY: run build docker-up docker-down migrate-up migrate-down lint
 
 include .env
 export
@@ -20,3 +20,6 @@ migrate-up:
 
 migrate-down:
 	goose -dir migrations postgres "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable" down
+
+lint:
+	golangci-lint run
