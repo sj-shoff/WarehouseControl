@@ -1,11 +1,13 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
+
 	"sso/internal/config"
 	authgrpc "sso/internal/grpc/auth"
 	appsRepository "sso/internal/repository/apps/postgres"
@@ -57,23 +59,63 @@ func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
 func (a *App) Run() error {
 	lis, err := net.Listen("tcp", ":"+a.cfg.GRPC.Port)
 	if err != nil {
-		return fmt.Errorf("listen: %w", err)
+		return fmt.Errorf("failed to listen: %w", err)
 	}
 
-	a.logger.Info().Str("port", a.cfg.GRPC.Port).Msg("gRPC SSO started")
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
+	serverErrors := make(chan error, 1)
 
 	go func() {
+		a.logger.Info().Str("port", a.cfg.GRPC.Port).Msg("gRPC SSO server starting")
 		if err := a.server.Serve(lis); err != nil {
-			a.logger.Error().Err(err).Msg("gRPC serve failed")
+			serverErrors <- err
 		}
 	}()
 
-	<-ctx.Done()
-	a.logger.Info().Msg("Graceful shutdown...")
-	a.server.GracefulStop()
-	a.db.Master.Close()
+	select {
+	case err := <-serverErrors:
+		return fmt.Errorf("gRPC server failed: %w", err)
+	case sig := <-a.handleSignals():
+		a.logger.Info().Str("signal", sig.String()).Msg("shutdown signal received")
+		a.Stop()
+	}
+
 	return nil
+}
+
+func (a *App) handleSignals() <-chan os.Signal {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	return sigChan
+}
+
+func (a *App) Stop() {
+	a.logger.Info().Msg("performing graceful shutdown...")
+
+	done := make(chan struct{})
+
+	go func() {
+		a.server.GracefulStop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		a.logger.Info().Msg("gRPC server stopped gracefully")
+	case <-time.After(a.cfg.GRPC.Timeout):
+		a.logger.Warn().
+			Str("timeout", a.cfg.GRPC.Timeout.String()).
+			Msg("graceful shutdown timed out, forcing stop")
+
+		a.server.Stop()
+	}
+
+	if a.db != nil {
+		if err := a.db.Master.Close(); err != nil {
+			a.logger.Error().Err(err).Msg("failed to close DB")
+		} else {
+			a.logger.Info().Msg("database connection closed")
+		}
+	}
+
+	a.logger.Info().Msg("shutdown complete")
 }
