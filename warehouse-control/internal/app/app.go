@@ -46,7 +46,9 @@ func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
 
 	ssoClient, err := sso.NewClient(cfg)
 	if err != nil {
-		db.Master.Close()
+		if closeErr := db.Master.Close(); closeErr != nil {
+			logger.Error().Err(closeErr).Msg("failed to close db after sso init error")
+		}
 		return nil, fmt.Errorf("sso: %w", err)
 	}
 
