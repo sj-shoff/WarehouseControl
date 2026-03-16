@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
@@ -14,15 +13,14 @@ import (
 )
 
 type Claims struct {
-	UserID   int64           `json:"user_id"`
-	Username string          `json:"username"`
-	Role     domain.UserRole `json:"role"`
 	jwt.RegisteredClaims
+	UID      int64  `json:"uid"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	AppID    int    `json:"app_id"`
 }
 
-type contextKey string
-
-const UserContextKey contextKey = "user"
+const UserContextKey = "user_claims"
 
 type AuthMiddleware struct {
 	secret string
@@ -41,11 +39,13 @@ func (m *AuthMiddleware) Middleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrUnauthorized.Error()})
 			return
 		}
+
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrUnauthorized.Error()})
 			return
 		}
+
 		tokenString := parts[1]
 		claims, err := m.validateToken(tokenString)
 		if err != nil {
@@ -53,8 +53,8 @@ func (m *AuthMiddleware) Middleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrUnauthorized.Error()})
 			return
 		}
-		ctx := context.WithValue(c.Request.Context(), UserContextKey, claims)
-		c.Request = c.Request.WithContext(ctx)
+
+		c.Set(UserContextKey, claims)
 		c.Next()
 	}
 }
@@ -67,33 +67,55 @@ func (m *AuthMiddleware) validateToken(tokenString string) (*Claims, error) {
 		}
 		return []byte(m.secret), nil
 	})
+
 	if err != nil || !token.Valid {
 		return nil, customErr.ErrInvalidToken
 	}
+
 	return claims, nil
 }
 
 func (m *AuthMiddleware) RequireRole(roles ...domain.UserRole) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		claims, ok := c.Request.Context().Value(UserContextKey).(*Claims)
+		val, exists := c.Get(UserContextKey)
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrUnauthorized.Error()})
+			return
+		}
+
+		claims, ok := val.(*Claims)
 		if !ok || claims == nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrUnauthorized.Error()})
 			return
 		}
+
+		hasAccess := false
 		for _, role := range roles {
-			if claims.Role == role {
-				c.Next()
-				return
+			if claims.Role == string(role) {
+				hasAccess = true
+				break
 			}
 		}
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": customErr.ErrForbidden.Error()})
+
+		if !hasAccess {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": customErr.ErrForbidden.Error()})
+			return
+		}
+
+		c.Next()
 	}
 }
 
 func GetClaimsFromContext(c *gin.Context) *Claims {
-	claims, ok := c.Request.Context().Value(UserContextKey).(*Claims)
+	val, exists := c.Get(UserContextKey)
+	if !exists {
+		return nil
+	}
+
+	claims, ok := val.(*Claims)
 	if !ok {
 		return nil
 	}
+
 	return claims
 }

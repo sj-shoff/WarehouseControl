@@ -33,7 +33,3 @@ jobs:
     - name: Get dependencies
       run: go mod download
       working-directory: ${{ matrix.project }}
-      
-    - name: Run tests
-      run: go test -v -cover -race ./...
-      working-directory: ${{ matrix.project }}

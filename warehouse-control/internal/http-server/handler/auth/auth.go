@@ -67,32 +67,21 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 func (h *AuthHandler) AdminRegisterNewUser(c *gin.Context) {
 	var req dto.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": customErr.ErrInvalidRequest})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "wrong format"})
 		return
 	}
 
 	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrNoTokenProvided})
-		return
-	}
-
 	md := metadata.Pairs("authorization", authHeader)
 	ctx := metadata.NewOutgoingContext(c.Request.Context(), md)
 
 	userID, err := h.ssoClient.Register(ctx, req.Username, req.Password, req.Role)
 
 	if err != nil {
-		h.logger.Warn().
-			Err(err).
-			Str("username", req.Username).
-			Msg("register failed")
-
-		c.JSON(http.StatusInternalServerError, gin.H{"error": customErr.ErrCreateUser})
+		h.logger.Warn().Err(err).Msg("register failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "SSO: " + err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, dto.RegisterResponse{
-		UserID: userID,
-	})
+	c.JSON(http.StatusCreated, dto.RegisterResponse{UserID: userID})
 }

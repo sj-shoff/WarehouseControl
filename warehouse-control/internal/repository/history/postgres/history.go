@@ -2,6 +2,7 @@ package history_postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -92,18 +93,33 @@ func (r *HistoryPostgresRepository) GetHistory(ctx context.Context, filter domai
 	records := make([]*domain.HistoryRecord, 0, filter.Limit)
 	for rows.Next() {
 		rec := &domain.HistoryRecord{}
+		var oldDataRaw, newDataRaw []byte
+
 		err := rows.Scan(
 			&rec.ID,
 			&rec.ItemID,
 			&rec.Action,
-			&rec.OldData,
-			&rec.NewData,
+			&oldDataRaw,
+			&newDataRaw,
 			&rec.ChangedBy,
 			&rec.ChangedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("%w: scan history record: %v", customErr.ErrDatabase, err)
 		}
+
+		if len(oldDataRaw) > 0 {
+			if err := json.Unmarshal(oldDataRaw, &rec.OldData); err != nil {
+				return nil, 0, fmt.Errorf("%w: unmarshal old_data error: %v", customErr.ErrDatabase, err)
+			}
+		}
+
+		if len(newDataRaw) > 0 {
+			if err := json.Unmarshal(newDataRaw, &rec.NewData); err != nil {
+				return nil, 0, fmt.Errorf("%w: unmarshal new_data error: %v", customErr.ErrDatabase, err)
+			}
+		}
+
 		records = append(records, rec)
 	}
 

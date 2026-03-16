@@ -24,7 +24,6 @@ type RegisterRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 	Role     string `json:"role" binding:"required"`
-	AppId    int32  `json:"app_id" binding:"required"`
 }
 
 type RegisterResponse struct {

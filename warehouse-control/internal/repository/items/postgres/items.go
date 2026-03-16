@@ -211,9 +211,11 @@ func (r *ItemsPostgresRepository) BulkDeleteItems(ctx context.Context, ids []int
 }
 
 func (r *ItemsPostgresRepository) setAuditUser(ctx context.Context, tx *sql.Tx, username string) error {
-	_, err := tx.ExecContext(ctx, "SET LOCAL warehouse_control.changed_by = $1", username)
+	query := `SELECT set_config('warehouse_control.changed_by', $1, true)`
+
+	_, err := tx.ExecContext(ctx, query, username)
 	if err != nil {
-		return fmt.Errorf("%w: failed to set audit user: %v", customErr.ErrDatabase, err)
+		return fmt.Errorf("%w: failed to set audit user via set_config: %v", customErr.ErrDatabase, err)
 	}
 	return nil
 }

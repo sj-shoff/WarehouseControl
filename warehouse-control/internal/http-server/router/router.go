@@ -39,26 +39,41 @@ func New(
 	}
 
 	workDir, _ := os.Getwd()
-	r.Static("/static", filepath.Join(workDir, "static"))
+	staticDir := filepath.Join(workDir, "static")
+	r.Static("/static", staticDir)
 
-	r.POST("/auth/login", auth.Login)
-	r.POST("/auth/refresh", auth.Refresh)
+	authGroup := r.Group("/auth")
+	{
+		authGroup.POST("/login", auth.Login)
+		authGroup.POST("/refresh", auth.Refresh)
+	}
 
 	protected := r.Group("/")
 	protected.Use(mw.Middleware())
+	{
+		protected.POST("/auth/register", mw.RequireRole(domain.RoleAdmin), auth.AdminRegisterNewUser)
 
-	protected.GET("/items", items.GetItems)
-	protected.GET("/items/:id", items.GetItemByID)
-	protected.POST("/items", mw.RequireRole(domain.RoleManager, domain.RoleAdmin), items.CreateItem)
-	protected.PUT("/items/:id", mw.RequireRole(domain.RoleManager, domain.RoleAdmin), items.UpdateItem)
-	protected.DELETE("/items/:id", mw.RequireRole(domain.RoleManager, domain.RoleAdmin), items.DeleteItem)
-	protected.DELETE("/items/bulk", mw.RequireRole(domain.RoleAdmin), items.BulkDeleteItems)
+		itemsGroup := protected.Group("/items")
+		{
+			itemsGroup.GET("", items.GetItems)
+			itemsGroup.GET("/:id", items.GetItemByID)
 
-	protected.GET("/history", history.GetHistory)
-	protected.GET("/history/item/:id", history.GetItemHistory)
-	protected.GET("/history/export", history.ExportHistoryCSV)
+			writeItems := itemsGroup.Group("")
+			writeItems.Use(mw.RequireRole(domain.RoleManager, domain.RoleAdmin))
+			{
+				writeItems.POST("", items.CreateItem)
+				writeItems.PUT("/:id", items.UpdateItem)
+				writeItems.DELETE("/:id", items.DeleteItem)
+			}
 
-	r.GET("/", serveIndex)
+			itemsGroup.DELETE("/bulk", mw.RequireRole(domain.RoleAdmin), items.BulkDeleteItems)
+		}
+
+		protected.GET("/history", history.GetHistory)
+		protected.GET("/history/item/:id", history.GetItemHistory)
+		protected.GET("/history/export", history.ExportHistoryCSV)
+	}
+
 	r.NoRoute(serveIndex)
 
 	return r
