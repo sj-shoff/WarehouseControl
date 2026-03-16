@@ -16,11 +16,32 @@ import (
 
 type serverAPI struct {
 	ssov1.UnimplementedAuthServer
-	auth authProvider
+	auth AuthProvider
 }
 
-func Register(gRPCServer *grpc.Server, auth authProvider) {
+func Register(gRPCServer *grpc.Server, auth AuthProvider) {
 	ssov1.RegisterAuthServer(gRPCServer, &serverAPI{auth: auth})
+}
+
+func (s *serverAPI) InitialBootstrap(
+	ctx context.Context,
+	req *ssov1.BootstrapRequest,
+) (*ssov1.BootstrapResponse, error) {
+	uid, appID, err := s.auth.InitialBootstrap(
+		ctx,
+		req.GetAppName(),
+		req.GetAppSecret(),
+		req.GetAdminUser(),
+		req.GetAdminPass(),
+	)
+	if err != nil {
+		return nil, status.Error(codes.Internal, customErr.ErrBootstrap.Error())
+	}
+
+	return &ssov1.BootstrapResponse{
+		AppId:   appID,
+		AdminId: uid,
+	}, nil
 }
 
 func (s *serverAPI) Login(ctx context.Context, in *ssov1.LoginRequest) (*ssov1.LoginResponse, error) {
@@ -28,7 +49,13 @@ func (s *serverAPI) Login(ctx context.Context, in *ssov1.LoginRequest) (*ssov1.L
 		return nil, err
 	}
 
-	claim, access, refresh, expiresAt, err := s.auth.Login(ctx, in.GetUsername(), in.GetPassword(), int(in.GetAppId()))
+	claim, access, refresh, expiresAt, err := s.auth.Login(
+		ctx,
+		in.GetUsername(),
+		in.GetPassword(),
+		int(in.GetAppId()),
+		in.GetAppSecret(),
+	)
 	if err != nil {
 		if errors.Is(err, customErr.ErrInvalidCredentials) {
 			return nil, status.Error(codes.Unauthenticated, customErr.ErrInvalidCredentials.Error())
@@ -124,7 +151,7 @@ func (s *serverAPI) UpdateUserRole(ctx context.Context, in *ssov1.UpdateRoleRequ
 }
 
 func validateLogin(in *ssov1.LoginRequest) error {
-	if in.GetUsername() == "" || in.GetPassword() == "" || in.GetAppId() <= 0 {
+	if in.GetUsername() == "" || in.GetPassword() == "" || in.GetAppId() <= 0 || in.GetAppSecret() == "" {
 		return status.Error(codes.InvalidArgument, customErr.ErrInvalidInput.Error())
 	}
 	return nil

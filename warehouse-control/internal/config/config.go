@@ -15,7 +15,7 @@ type Config struct {
 		Port            int           `env:"POSTGRES_PORT" validate:"required"`
 		User            string        `env:"POSTGRES_USER" validate:"required"`
 		Pass            string        `env:"POSTGRES_PASSWORD" validate:"required"`
-		DBName          string        `env:"POSTGRES_DB" validate:"required"`
+		DBName          string        `env:"POSTGRES_DB_WAREHOUSE" validate:"required"`
 		MaxOpenConns    int           `env:"POSTGRES_MAX_OPEN_CONNS"`
 		MaxIdleConns    int           `env:"POSTGRES_MAX_IDLE_CONNS"`
 		ConnMaxLifetime time.Duration `env:"POSTGRES_CONN_MAX_LIFETIME"`
@@ -33,8 +33,14 @@ type Config struct {
 	}
 	SSO struct {
 		GRPCAddr      string        `env:"SSO_GRPC_ADDR" validate:"required"`
+		AppName       string        `env:"SSO_APP_NAME" validate:"required"`
+		AppSecret     string        `env:"SSO_APP_SECRET" validate:"required"`
 		AppID         int32         `env:"SSO_APP_ID" validate:"required"`
-		ClientTimeout time.Duration `env:"SSO_CLIENT_TIMEOUT" validate:"required"`
+		ClientTimeout time.Duration `env:"SSO_CLIENT_TIMEOUT" env-default:"10s"`
+	}
+	Admin struct {
+		User string `env:"INIT_ADMIN_USERNAME" validate:"required"`
+		Pass string `env:"INIT_ADMIN_PASSWORD" validate:"required"`
 	}
 	Retries struct {
 		Attempts int     `env:"RETRIES_ATTEMPTS" validate:"required"`

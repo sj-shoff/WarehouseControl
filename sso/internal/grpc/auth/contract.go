@@ -6,10 +6,11 @@ import (
 	"time"
 )
 
-type authProvider interface {
-	Login(ctx context.Context, user, pass string, appID int) (*domain.UserClaim, string, string, time.Time, error)
-	Refresh(ctx context.Context, token string, appID int) (string, string, error)
-	RegisterNewUser(ctx context.Context, user, pass string, role domain.UserRole, appID int) (int64, error)
+type AuthProvider interface {
+	Login(ctx context.Context, username, password string, appID int, appSecret string) (claim *domain.UserClaim, accessToken string, refreshToken string, expiresAt time.Time, err error)
+	RegisterNewUser(ctx context.Context, username, password string, role domain.UserRole, appID int) (userID int64, err error)
+	Refresh(ctx context.Context, refreshToken string, appID int) (accessToken string, newRefreshToken string, err error)
 	GetUsers(ctx context.Context) ([]*domain.User, error)
-	UpdateUserRole(ctx context.Context, uid int64, role domain.UserRole) error
+	UpdateUserRole(ctx context.Context, userID int64, role domain.UserRole) error
+	InitialBootstrap(ctx context.Context, appName, appSecret, adminUser, adminPass string) (uid int64, appID int32, err error)
 }

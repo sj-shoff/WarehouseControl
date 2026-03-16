@@ -5,7 +5,7 @@ go 1.24.7
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/sj-shoff/sso_proto v1.0.2
+	github.com/sj-shoff/sso_proto v1.0.4
 	github.com/wb-go/wbf v0.0.13
 	golang.org/x/crypto v0.48.0
 )

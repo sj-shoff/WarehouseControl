@@ -1,4 +1,5 @@
 -- +goose Up
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION log_item_changes() RETURNS TRIGGER AS $$
 BEGIN
     IF (TG_OP = 'INSERT') THEN
@@ -15,10 +16,18 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 CREATE TRIGGER items_history_trigger
 AFTER INSERT OR UPDATE OR DELETE ON items
-FOR EACH ROW EXECUTE PROCEDURE log_item_changes();
+FOR EACH ROW EXECUTE FUNCTION log_item_changes();
+-- +goose StatementEnd
 
 -- +goose Down
+-- +goose StatementBegin
 DROP TRIGGER IF EXISTS items_history_trigger ON items;
+-- +goose StatementEnd
+-- +goose StatementBegin
 DROP FUNCTION IF EXISTS log_item_changes();
+-- +goose StatementEnd

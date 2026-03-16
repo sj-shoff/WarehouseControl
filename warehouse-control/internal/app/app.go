@@ -51,6 +51,21 @@ func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
 		}
 		return nil, fmt.Errorf("sso: %w", err)
 	}
+	bootstrapCtx, cancel := context.WithTimeout(context.Background(), cfg.SSO.ClientTimeout)
+	defer cancel()
+
+	appID, err := ssoClient.InitialBootstrap(bootstrapCtx)
+	if err != nil {
+		if closeErr := ssoClient.Close(); closeErr != nil {
+			logger.Error().Err(closeErr).Msg("failed to close ssoClient after sso bootstrap init error")
+		}
+		if closeErr := db.Master.Close(); closeErr != nil {
+			logger.Error().Err(closeErr).Msg("failed to close db after sso bootstrap init error")
+		}
+		return nil, fmt.Errorf("sso bootstrap: %w", err)
+	}
+
+	cfg.SSO.AppID = appID
 
 	itemsR := itemsRepo.NewPostgresRepository(db, retries)
 	historyR := historyRepo.NewPostgresRepository(db, retries)

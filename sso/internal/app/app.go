@@ -10,9 +10,10 @@ import (
 
 	"sso/internal/config"
 	authgrpc "sso/internal/grpc/auth"
+	"sso/internal/grpc/interceptors"
 	appsRepository "sso/internal/repository/apps/postgres"
+	tokenRepository "sso/internal/repository/tokens/postgres"
 	userRepository "sso/internal/repository/users/postgres"
-	appsUsecase "sso/internal/usecase/apps"
 	authUsecase "sso/internal/usecase/auth"
 
 	"github.com/wb-go/wbf/dbpg"
@@ -40,18 +41,20 @@ func NewApp(cfg *config.Config, logger *zlog.Zerolog) (*App, error) {
 	}
 
 	userRepo := userRepository.NewPostgresRepository(db, retries)
+	tokenRepo := tokenRepository.NewPostgresRepository(db, retries)
 	appsRepo := appsRepository.NewPostgresRepository(db, retries)
 
-	appsUc := appsUsecase.NewAppUsecase(appsRepo, logger)
-	authUc := authUsecase.NewAuthUsecase(userRepo, appsUc, logger, cfg.JWT.Secret, cfg.JWT.AccessTokenTTL, cfg.JWT.RefreshTokenTTL)
+	authUc := authUsecase.NewAuthUsecase(userRepo, tokenRepo, appsRepo, logger, cfg.JWT.Secret, cfg.JWT.AccessTokenTTL, cfg.JWT.RefreshTokenTTL)
 
-	grpcServer := grpc.NewServer()
-	authgrpc.Register(grpcServer, authUc)
+	gRPCServer := grpc.NewServer(
+		grpc.UnaryInterceptor(interceptors.UnaryAdminInterceptor(cfg.JWT.Secret)),
+	)
+	authgrpc.Register(gRPCServer, authUc)
 
 	return &App{
 		cfg:    cfg,
 		logger: logger,
-		server: grpcServer,
+		server: gRPCServer,
 		db:     db,
 	}, nil
 }

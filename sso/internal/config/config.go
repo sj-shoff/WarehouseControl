@@ -15,7 +15,7 @@ type Config struct {
 		Port            int           `env:"POSTGRES_PORT" validate:"required"`
 		User            string        `env:"POSTGRES_USER" validate:"required"`
 		Pass            string        `env:"POSTGRES_PASSWORD" validate:"required"`
-		DBName          string        `env:"POSTGRES_DB" validate:"required"`
+		DBName          string        `env:"POSTGRES_DB_SSO" validate:"required"`
 		MaxOpenConns    int           `env:"POSTGRES_MAX_OPEN_CONNS"`
 		MaxIdleConns    int           `env:"POSTGRES_MAX_IDLE_CONNS"`
 		ConnMaxLifetime time.Duration `env:"POSTGRES_CONN_MAX_LIFETIME"`

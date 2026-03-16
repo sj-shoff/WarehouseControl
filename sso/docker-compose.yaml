@@ -1,37 +1,41 @@
 version: '3.8'
+
 services:
   sso:
     build: .
-    env_file:
-      - .env
+    container_name: sso
+    env_file: .env
     ports:
-      - "${GRPC_PORT}:${GRPC_PORT}"
+      - "${GRPC_PORT}:44044"
     depends_on:
-      postgres:
+      sso-db:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - infra-net
+      - warehouse-net
 
-  postgres:
+  sso-db:
     image: postgres:15-alpine
+    container_name: sso-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_DB_WAREHOUSE},${POSTGRES_DB_SSO}
+      POSTGRES_DB: ${POSTGRES_DB_SSO}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - sso_pg_data:/var/lib/postgresql/data
     ports:
-      - "${POSTGRES_PORT}:5432"
-    restart: unless-stopped
+      - "${POSTGRES_EXTERNAL_PORT}:${POSTGRES_PORT}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
-      - infra-net
+      - warehouse-net
 
 networks:
-  infra-net:
+  warehouse-net:
     external: true
+
+volumes:
+  sso_pg_data:

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/wb-go/wbf/zlog"
+	"google.golang.org/grpc/metadata"
 )
 
 type AuthHandler struct {
@@ -53,12 +54,45 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	newAccess, newRefresh, err := h.ssoClient.Refresh(c.Request.Context(), req.RefreshToken)
 	if err != nil {
 		h.logger.Warn().Err(err).Msg("refresh failed")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrInvalidRefreshToken.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"access_token":  newAccess,
-		"refresh_token": newRefresh,
+	c.JSON(http.StatusOK, dto.RefreshResponse{
+		AccessToken:  newAccess,
+		RefreshToken: newRefresh,
+	})
+}
+
+func (h *AuthHandler) AdminRegisterNewUser(c *gin.Context) {
+	var req dto.RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": customErr.ErrInvalidRequest})
+		return
+	}
+
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": customErr.ErrNoTokenProvided})
+		return
+	}
+
+	md := metadata.Pairs("authorization", authHeader)
+	ctx := metadata.NewOutgoingContext(c.Request.Context(), md)
+
+	userID, err := h.ssoClient.Register(ctx, req.Username, req.Password, req.Role)
+
+	if err != nil {
+		h.logger.Warn().
+			Err(err).
+			Str("username", req.Username).
+			Msg("register failed")
+
+		c.JSON(http.StatusInternalServerError, gin.H{"error": customErr.ErrCreateUser})
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.RegisterResponse{
+		UserID: userID,
 	})
 }

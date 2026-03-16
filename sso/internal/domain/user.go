@@ -17,6 +17,7 @@ func IsValidRole(role string) bool {
 type User struct {
 	ID           int64
 	Username     string
+	AppID        int
 	PasswordHash string
 	Role         UserRole
 	CreatedAt    time.Time

@@ -63,12 +63,12 @@ func (m *AuthMiddleware) validateToken(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, customErr.ErrTokenInvalid
+			return nil, customErr.ErrInvalidToken
 		}
 		return []byte(m.secret), nil
 	})
 	if err != nil || !token.Valid {
-		return nil, customErr.ErrTokenInvalid
+		return nil, customErr.ErrInvalidToken
 	}
 	return claims, nil
 }

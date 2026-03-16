@@ -37,9 +37,10 @@ func (c *Client) Login(ctx context.Context, username, password string) (string, 
 	defer cancel()
 
 	resp, err := c.authClient.Login(ctx, &ssov1.LoginRequest{
-		Username: username,
-		Password: password,
-		AppId:    c.cfg.SSO.AppID,
+		Username:  username,
+		Password:  password,
+		AppId:     c.cfg.SSO.AppID,
+		AppSecret: c.cfg.SSO.AppSecret,
 	})
 	if err != nil {
 		return "", "", 0, fmt.Errorf("sso login: %w", err)
@@ -48,17 +49,51 @@ func (c *Client) Login(ctx context.Context, username, password string) (string, 
 	return resp.GetAccessToken(), resp.GetRefreshToken(), resp.GetExpiresAt(), nil
 }
 
+func (c *Client) Register(ctx context.Context, username, password, role string) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.cfg.SSO.ClientTimeout)
+	defer cancel()
+
+	resp, err := c.authClient.Register(ctx, &ssov1.RegisterRequest{
+		Username: username,
+		Password: password,
+		Role:     role,
+		AppId:    int32(c.cfg.SSO.AppID),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("sso register: %w", err)
+	}
+
+	return resp.GetUserId(), nil
+}
+
 func (c *Client) Refresh(ctx context.Context, refreshToken string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.cfg.SSO.ClientTimeout)
 	defer cancel()
 
 	resp, err := c.authClient.Refresh(ctx, &ssov1.RefreshRequest{
 		RefreshToken: refreshToken,
-		AppId:        1,
+		AppId:        c.cfg.SSO.AppID,
 	})
 	if err != nil {
 		return "", "", fmt.Errorf("sso refresh: %w", err)
 	}
 
 	return resp.GetAccessToken(), resp.GetRefreshToken(), nil
+}
+
+func (c *Client) InitialBootstrap(ctx context.Context) (int32, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.cfg.SSO.ClientTimeout)
+	defer cancel()
+
+	resp, err := c.authClient.InitialBootstrap(ctx, &ssov1.BootstrapRequest{
+		AppName:   c.cfg.SSO.AppName,
+		AppSecret: c.cfg.SSO.AppSecret,
+		AdminUser: c.cfg.Admin.User,
+		AdminPass: c.cfg.Admin.Pass,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("sso bootstrap failed: %w", err)
+	}
+
+	return resp.GetAppId(), nil
 }

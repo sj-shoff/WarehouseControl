@@ -18,8 +18,9 @@ import (
 )
 
 type AuthUsecase struct {
-	userRepo   userRepository
-	appUsecase appUsecase
+	userRepo   UserRepository
+	tokenRepo  TokenRepository
+	appRepo    AppRepository
 	logger     *zlog.Zerolog
 	jwtSecret  string
 	accessTTL  time.Duration
@@ -27,8 +28,9 @@ type AuthUsecase struct {
 }
 
 func NewAuthUsecase(
-	userRepo userRepository,
-	appUsecase appUsecase,
+	userRepo UserRepository,
+	tokenRepo TokenRepository,
+	appRepo AppRepository,
 	logger *zlog.Zerolog,
 	jwtSecret string,
 	accessTTL time.Duration,
@@ -36,7 +38,8 @@ func NewAuthUsecase(
 ) *AuthUsecase {
 	return &AuthUsecase{
 		userRepo:   userRepo,
-		appUsecase: appUsecase,
+		tokenRepo:  tokenRepo,
+		appRepo:    appRepo,
 		logger:     logger,
 		jwtSecret:  jwtSecret,
 		accessTTL:  accessTTL,
@@ -44,20 +47,26 @@ func NewAuthUsecase(
 	}
 }
 
-func (s *AuthUsecase) Login(ctx context.Context, username, password string, appID int) (*domain.UserClaim, string, string, time.Time, error) {
-	if username == "" || password == "" || appID <= 0 {
+func (s *AuthUsecase) Login(ctx context.Context, username, password string, appID int, appSecret string) (*domain.UserClaim, string, string, time.Time, error) {
+	if username == "" || password == "" || appID <= 0 || appSecret == "" {
 		return nil, "", "", time.Time{}, customErr.ErrInvalidInput
 	}
 
-	if _, err := s.appUsecase.GetByID(ctx, appID); err != nil {
+	app, err := s.appRepo.GetByID(ctx, appID)
+	if err != nil {
 		s.logger.Warn().Int("app_id", appID).Msg("access attempt to non-existent app")
 		return nil, "", "", time.Time{}, customErr.ErrInvalidInput
 	}
 
-	user, err := s.userRepo.GetUserByUsername(ctx, username)
+	if app.Secret != appSecret {
+		s.logger.Warn().Int("app_id", appID).Msg("invalid app secret provided during login")
+		return nil, "", "", time.Time{}, customErr.ErrInvalidInput
+	}
+
+	user, err := s.userRepo.GetUserByUsernameAndApp(ctx, username, appID)
 	if err != nil {
 		if errors.Is(err, customErr.ErrUserNotFound) {
-			s.logger.Warn().Str("username", username).Msg("invalid credentials")
+			s.logger.Warn().Str("username", username).Msg("invalid credentials (user not found in app)")
 			return nil, "", "", time.Time{}, customErr.ErrInvalidCredentials
 		}
 		return nil, "", "", time.Time{}, fmt.Errorf("get user: %w", err)
@@ -75,7 +84,7 @@ func (s *AuthUsecase) Login(ctx context.Context, username, password string, appI
 	}
 
 	refreshToken := uuid.New().String()
-	if err := s.userRepo.SaveRefreshToken(ctx, user.ID, s.hashToken(refreshToken), appID, time.Now().Add(s.refreshTTL)); err != nil {
+	if err := s.tokenRepo.SaveRefreshToken(ctx, user.ID, s.hashToken(refreshToken), appID, time.Now().Add(s.refreshTTL)); err != nil {
 		s.logger.Error().Err(err).Msg("failed to save refresh token")
 		return nil, "", "", time.Time{}, fmt.Errorf("save refresh: %w", err)
 	}
@@ -92,7 +101,7 @@ func (s *AuthUsecase) Login(ctx context.Context, username, password string, appI
 func (s *AuthUsecase) Refresh(ctx context.Context, oldRefreshToken string, appID int) (string, string, error) {
 	tokenHash := s.hashToken(oldRefreshToken)
 
-	userID, savedAppID, expiresAt, err := s.userRepo.GetRefreshToken(ctx, tokenHash)
+	userID, savedAppID, expiresAt, err := s.tokenRepo.GetRefreshToken(ctx, tokenHash)
 	if err != nil {
 		if errors.Is(err, customErr.ErrInvalidCredentials) {
 			return "", "", customErr.ErrInvalidCredentials
@@ -100,7 +109,7 @@ func (s *AuthUsecase) Refresh(ctx context.Context, oldRefreshToken string, appID
 		return "", "", fmt.Errorf("get refresh token: %w", err)
 	}
 
-	_ = s.userRepo.DeleteRefreshToken(ctx, tokenHash)
+	_ = s.tokenRepo.DeleteRefreshToken(ctx, tokenHash)
 
 	if time.Now().After(expiresAt) || savedAppID != appID {
 		s.logger.Warn().Int64("uid", userID).Msg("invalid or expired refresh token attempt")
@@ -118,7 +127,7 @@ func (s *AuthUsecase) Refresh(ctx context.Context, oldRefreshToken string, appID
 	}
 
 	newRefreshToken := uuid.New().String()
-	if err := s.userRepo.SaveRefreshToken(ctx, user.ID, s.hashToken(newRefreshToken), appID, time.Now().Add(s.refreshTTL)); err != nil {
+	if err := s.tokenRepo.SaveRefreshToken(ctx, user.ID, s.hashToken(newRefreshToken), appID, time.Now().Add(s.refreshTTL)); err != nil {
 		return "", "", fmt.Errorf("save new refresh: %w", err)
 	}
 
@@ -132,7 +141,7 @@ func (s *AuthUsecase) RegisterNewUser(ctx context.Context, username, password st
 		return 0, customErr.ErrInvalidInput
 	}
 
-	if _, err := s.appUsecase.GetByID(ctx, appID); err != nil {
+	if _, err := s.appRepo.GetByID(ctx, appID); err != nil {
 		return 0, customErr.ErrInvalidInput
 	}
 
@@ -150,6 +159,7 @@ func (s *AuthUsecase) RegisterNewUser(ctx context.Context, username, password st
 		Username:     username,
 		PasswordHash: string(passHash),
 		Role:         role,
+		AppID:        appID,
 	})
 
 	if err != nil {
@@ -187,4 +197,35 @@ func (s *AuthUsecase) UpdateUserRole(ctx context.Context, userID int64, role dom
 func (s *AuthUsecase) hashToken(t string) string {
 	h := sha256.Sum256([]byte(t))
 	return hex.EncodeToString(h[:])
+}
+
+func (u *AuthUsecase) InitialBootstrap(
+	ctx context.Context,
+	appName,
+	appSecret,
+	adminUser,
+	adminPass string,
+) (int64, int32, error) {
+	appID, err := u.appRepo.UpsertApp(ctx, appName, appSecret)
+	if err != nil {
+		u.logger.Error().Err(err).Str("app", appName).Msg("failed to upsert app")
+		return 0, 0, fmt.Errorf("app bootstrap failed: %w", err)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(adminPass), bcrypt.DefaultCost)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	uid, err := u.userRepo.CreateAdminIfNotExist(ctx, adminUser, string(hash), int(appID))
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to ensure admin: %w", err)
+	}
+
+	u.logger.Info().
+		Str("app", appName).
+		Int32("app_id", appID).
+		Msg("application bootstrap completed")
+
+	return uid, appID, nil
 }
