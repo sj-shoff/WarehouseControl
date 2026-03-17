@@ -72,6 +72,7 @@ func New(
 		protected.GET("/history", history.GetHistory)
 		protected.GET("/history/item/:id", history.GetItemHistory)
 		protected.GET("/history/export", history.ExportHistoryCSV)
+		protected.GET("/history/diff/:id", history.GetDiff)
 	}
 
 	r.NoRoute(serveIndex)

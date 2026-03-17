@@ -77,8 +77,6 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH
 github.com/rs/xid v1.5.0/go.mod h1:trrq9SKmegXys3aeAKXMUTdJsYXVwGY3RLcfgqegfbg=
 github.com/rs/zerolog v1.30.0 h1:SymVODrcRsaRaSInD9yQtKbtWqwsfoPcRff/oRXLj4c=
 github.com/rs/zerolog v1.30.0/go.mod h1:/tk+P47gFdPXq4QYjvCmT5/Gsug2nagsFWBWhAiSi1w=
-github.com/sj-shoff/sso_proto v1.0.3 h1:qb0PGDorbFzNwym3m+BOSHHzWX/+Tial1W5qht4f94k=
-github.com/sj-shoff/sso_proto v1.0.3/go.mod h1:KvvVrYDolltTIXq6DAJs9UL0cearheN0tsdo1c4sCnM=
 github.com/sj-shoff/sso_proto v1.0.4 h1:/gMySsv82blZEhHby/MgdAUtefzD9Y66hy8MIK0lESw=
 github.com/sj-shoff/sso_proto v1.0.4/go.mod h1:KvvVrYDolltTIXq6DAJs9UL0cearheN0tsdo1c4sCnM=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

@@ -6,7 +6,7 @@ import (
 	"warehouse-control/internal/domain"
 )
 
-type itemsRepository interface {
+type ItemsRepository interface {
 	CreateItem(ctx context.Context, item *domain.Item, username string) (int64, error)
 	GetItems(ctx context.Context, limit, offset int, search string) ([]*domain.Item, int, error)
 	GetItemByID(ctx context.Context, id int64) (*domain.Item, error)

@@ -3,6 +3,7 @@ package history_handler
 import (
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,11 +17,11 @@ import (
 )
 
 type HistoryHandler struct {
-	historyUsecase historyUsecase
+	historyUsecase HistoryUsecase
 	logger         *zlog.Zerolog
 }
 
-func NewHandler(historyUsecase historyUsecase, logger *zlog.Zerolog) *HistoryHandler {
+func NewHandler(historyUsecase HistoryUsecase, logger *zlog.Zerolog) *HistoryHandler {
 	return &HistoryHandler{
 		historyUsecase: historyUsecase,
 		logger:         logger,
@@ -103,22 +104,17 @@ func (h *HistoryHandler) GetItemHistory(c *gin.Context) {
 
 func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 	filter := domain.HistoryFilter{
-		Limit:  1000,
+		Limit:  10000,
 		Offset: 0,
 	}
 
 	if limitStr := c.Query("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
+		if l, _ := strconv.Atoi(limitStr); l > 0 {
 			filter.Limit = l
 		}
 	}
-	if offsetStr := c.Query("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			filter.Offset = o
-		}
-	}
 	if itemID := c.Query("item_id"); itemID != "" {
-		if id, err := strconv.ParseInt(itemID, 10, 64); err == nil && id > 0 {
+		if id, _ := strconv.ParseInt(itemID, 10, 64); id > 0 {
 			filter.ItemID = &id
 		}
 	}
@@ -138,6 +134,7 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 			filter.DateTo = &t
 		}
 	}
+
 	records, err := h.historyUsecase.GetHistory(c.Request.Context(), filter)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("ExportHistoryCSV failed")
@@ -145,21 +142,52 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 		return
 	}
 
-	c.Header("Content-Type", "text/csv")
-	c.Header("Content-Disposition", "attachment; filename=history_export.csv")
+	filename := fmt.Sprintf("warehouse_history_%s_%s.csv",
+		time.Now().Format("2006-01-02"),
+		time.Now().Format("15-04-05"))
+
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	c.Writer.Write([]byte("\xef\xbb\xbf"))
 
 	writer := csv.NewWriter(c.Writer)
+	writer.Comma = ';'
+	writer.UseCRLF = true
 	defer writer.Flush()
 
-	if err := writer.Write([]string{"ID", "Item ID", "Action", "Changed By", "Changed At", "Old Name", "Old SKU", "Old Quantity", "Old Price", "New Name", "New SKU", "New Quantity", "New Price"}); err != nil {
-		h.logger.Error().Err(err).Msg("Failed to write CSV header")
-		h.writeError(c, customErr.ErrInternal)
-		return
+	writer.Write([]string{"ОТЧЁТ ПО ИСТОРИИ ИЗМЕНЕНИЙ — Warehouse Control"})
+	writer.Write([]string{""})
+
+	period := "За всё время"
+	if filter.DateFrom != nil && filter.DateTo != nil {
+		period = fmt.Sprintf("Период: %s — %s",
+			filter.DateFrom.Format("02.01.2006"),
+			filter.DateTo.Format("02.01.2006"))
 	}
+	writer.Write([]string{period})
+	writer.Write([]string{""})
+
+	writer.Write([]string{
+		"ID записи",
+		"ID товара",
+		"Действие",
+		"Пользователь",
+		"Дата изменения",
+		"Старое название",
+		"Старый SKU",
+		"Старое кол-во",
+		"Старая цена",
+		"Новое название",
+		"Новый SKU",
+		"Новое кол-во",
+		"Новая цена",
+	})
 
 	for _, rec := range records {
-		oldName, oldSKU, oldQty, oldPrice := "", "", "0", "0"
-		newName, newSKU, newQty, newPrice := "", "", "0", "0"
+		oldName, oldSKU, oldQty, oldPrice := "", "", "0", "0.00"
+		newName, newSKU, newQty, newPrice := "", "", "0", "0.00"
+
 		if rec.OldData != nil {
 			oldName = rec.OldData.Name
 			oldSKU = rec.OldData.SKU
@@ -172,20 +200,44 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 			newQty = strconv.Itoa(rec.NewData.Quantity)
 			newPrice = strconv.FormatFloat(rec.NewData.Price, 'f', 2, 64)
 		}
-		if err := writer.Write([]string{
+
+		writer.Write([]string{
 			strconv.FormatInt(rec.ID, 10),
 			strconv.FormatInt(rec.ItemID, 10),
 			rec.Action,
 			rec.ChangedBy,
-			rec.ChangedAt.Format(time.RFC3339),
-			oldName, oldSKU, oldQty, oldPrice,
-			newName, newSKU, newQty, newPrice,
-		}); err != nil {
-			h.logger.Error().Err(err).Msg("Failed to write CSV row")
-			h.writeError(c, customErr.ErrInternal)
-			return
-		}
+			rec.ChangedAt.Format("02.01.2006 15:04:05"),
+			oldName,
+			oldSKU,
+			oldQty,
+			oldPrice,
+			newName,
+			newSKU,
+			newQty,
+			newPrice,
+		})
 	}
+
+	writer.Flush()
+	h.logger.Info().Int("records", len(records)).Msg("CSV comlete")
+}
+
+func (h *HistoryHandler) GetDiff(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		h.writeError(c, customErr.ErrInvalidInput)
+		return
+	}
+
+	res, err := h.historyUsecase.GetDiff(c.Request.Context(), id)
+	if err != nil {
+		h.logger.Error().Err(err).Int64("id", id).Msg("GetDiff failed")
+		h.writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.MapToDTO(res))
 }
 
 func (h *HistoryHandler) writeError(c *gin.Context, err error) {

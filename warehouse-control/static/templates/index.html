@@ -10,17 +10,27 @@
         .tab.active { border-bottom: 3px solid #2563eb; color: #2563eb; }
         .hidden { display: none !important; }
         #global-loader { transition: transform 0.4s ease; }
+        @keyframes bounce-short {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .animate-bounce-short { animation: bounce-short 0.5s ease-in-out; }
+        .diff-added { background-color: #dcfce7; }
+        .diff-removed { background-color: #fee2e2; }
+        .diff-changed { background-color: #fef3c7; }
     </style>
 </head>
 <body class="text-slate-900 h-full flex flex-col">
     <div id="global-loader" class="fixed top-0 left-0 w-full h-1 bg-blue-600 z-[100] scale-x-0 origin-left"></div>
-
+    
     <div class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-8 flex flex-col">
         <header class="flex justify-between items-center mb-8 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-            <div class="flex items-center gap-3">
-                <div class="bg-blue-600 p-2.5 rounded-lg text-white"><i class="fas fa-boxes-stacked"></i></div>
+            <button onclick="UI.switchTab(0)" class="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer">
+                <div class="bg-blue-600 p-2.5 rounded-lg text-white">
+                    <i class="fas fa-boxes-stacked"></i>
+                </div>
                 <h1 class="text-xl font-extrabold tracking-tight uppercase">Warehouse</h1>
-            </div>
+            </button>
             <div id="user-profile" class="hidden flex items-center gap-4 border-l pl-4 border-slate-200">
                 <div class="text-right">
                     <div id="current-user" class="text-sm font-bold text-slate-800"></div>
@@ -31,25 +41,29 @@
                 </button>
             </div>
         </header>
-
+        
         <main class="flex-1">
             <section id="login" class="max-w-md mx-auto mt-20">
                 <div class="bg-white rounded-[2rem] shadow-xl p-10 text-center border border-slate-100">
                     <h2 class="text-2xl font-bold mb-8">Вход в систему</h2>
                     <form onsubmit="Auth.login(event)" class="space-y-4">
-                        <input id="username" type="text" placeholder="Логин" required class="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
-                        <input id="password" type="password" placeholder="Пароль" required class="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all">Войти</button>
+                        <input id="username" type="text" placeholder="Логин" required 
+                            class="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
+                        <input id="password" type="password" placeholder="Пароль" required 
+                            class="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all">
+                            Войти
+                        </button>
                     </form>
                 </div>
             </section>
-
+            
             <section id="app" class="hidden flex flex-col gap-6 h-full">
                 <nav id="role-nav" class="flex gap-2 bg-white p-1.5 rounded-xl shadow-sm border border-slate-200 w-fit">
                     <button onclick="UI.switchTab(0)" class="tab active px-6 py-2 rounded-lg text-sm font-bold transition-all">Товары</button>
                     <button onclick="UI.switchTab(1)" class="tab px-6 py-2 rounded-lg text-sm font-bold transition-all text-slate-500">Аудит</button>
                 </nav>
-
+                
                 <div id="tab-0" class="flex-1 flex flex-col gap-4">
                     <div class="flex flex-wrap gap-4 justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
                         <div class="flex gap-3" id="main-actions">
@@ -59,37 +73,79 @@
                             <button id="bulk-delete-btn" onclick="App.bulkDelete()" class="hidden bg-red-100 text-red-600 hover:bg-red-200 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50" disabled>
                                 <i class="fas fa-trash-alt"></i> Удалить выбранные
                             </button>
+                            <button id="select-all-btn" onclick="App.toggleAllItems()" class="hidden bg-slate-100 text-slate-700 hover:bg-slate-200 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2">
+                                <i class="fas fa-check-square"></i> <span id="select-all-text">Выбрать все</span>
+                            </button>
                         </div>
-                        <input id="search-items" onkeyup="if(event.key==='Enter') App.loadItems()" placeholder="Поиск (Enter)..." class="w-full md:w-80 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm">
+                        <input id="search-items" onkeyup="if(event.key==='Enter') App.loadItems()" placeholder="Поиск (Enter)..." 
+                            class="w-full md:w-80 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm">
                     </div>
                     <div id="items-table" class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"></div>
                 </div>
-
-                <div id="tab-1" class="hidden flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-slate-400 text-center">
-                    Раздел аудита в разработке или загружается...
+                
+                <div id="tab-1" class="hidden flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <div class="flex flex-col gap-4 h-full">
+                        <div class="flex flex-wrap gap-3 items-center bg-slate-50 p-4 rounded-xl">
+                            <input id="history-item-id" type="number" min="1" placeholder="ID товара" 
+                                class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm w-28">
+                            <select id="history-action" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm">
+                                <option value="">Все действия</option>
+                                <option value="INSERT">Создание</option>
+                                <option value="UPDATE">Изменение</option>
+                                <option value="DELETE">Удаление</option>
+                            </select>
+                            <input id="history-username" type="text" placeholder="Пользователь" 
+                                class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm w-36">
+                            <input id="history-date-from" type="date" 
+                                class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm">
+                            <input id="history-date-to" type="date" 
+                                class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm">
+                            <input id="history-limit" type="number" value="100" min="1" max="10000" placeholder="Лимит" 
+                                class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm w-24">
+                            <button onclick="App.loadHistory()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700">
+                                <i class="fas fa-search mr-2"></i>Найти
+                            </button>
+                            <button onclick="App.exportHistory()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700">
+                                <i class="fas fa-file-csv mr-2"></i>Экспорт CSV
+                            </button>
+                        </div>
+                        <div id="history-content" class="flex-1 overflow-auto"></div>
+                    </div>
                 </div>
             </section>
         </main>
     </div>
-
+    
     <div id="item-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
         <div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl relative">
             <h2 id="modal-title" class="text-xl font-bold mb-6">Товар</h2>
             <form id="item-form" onsubmit="App.saveItem(event)" class="space-y-4">
                 <input type="hidden" id="item-id">
-                <input id="item-name" placeholder="Название" required class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none">
+                <input id="item-name" placeholder="Название" required 
+                    class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none">
                 <div class="grid grid-cols-2 gap-4">
-                    <input id="item-sku" placeholder="SKU" required class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none">
-                    <input id="item-quantity" type="number" placeholder="Кол-во" required class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none">
+                    <input id="item-sku" placeholder="SKU" required 
+                        class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none">
+                    <input id="item-quantity" type="number" min="0" placeholder="Кол-во" required 
+                        class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none">
                 </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <input id="item-price" type="number" step="0.01" min="0" placeholder="Цена (₽)" 
+                        class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none">
+                    <input id="item-category" placeholder="Категория" 
+                        class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none">
+                </div>
+                <input id="item-location" placeholder="Место хранения" 
+                    class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none">
                 <div class="flex gap-3 pt-4">
-                    <button type="button" onclick="UI.closeModal('item-modal')" class="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold">Отмена</button>
+                    <button type="button" onclick="UI.closeModal('item-modal')" 
+                        class="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold">Отмена</button>
                     <button type="submit" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold">Ок</button>
                 </div>
             </form>
         </div>
     </div>
-
+    
     <script src="/static/js/app.js"></script>
 </body>
 </html>

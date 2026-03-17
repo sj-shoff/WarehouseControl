@@ -13,21 +13,21 @@ import (
 	"github.com/wb-go/wbf/zlog"
 )
 
-type ItemsUsecase struct {
-	repo     itemsRepository
+type itemsUsecase struct {
+	repo     ItemsRepository
 	logger   *zlog.Zerolog
 	validate *validator.Validate
 }
 
-func NewService(repo itemsRepository, logger *zlog.Zerolog) *ItemsUsecase {
-	return &ItemsUsecase{
+func NewService(repo ItemsRepository, logger *zlog.Zerolog) *itemsUsecase {
+	return &itemsUsecase{
 		repo:     repo,
 		logger:   logger,
 		validate: validator.New(),
 	}
 }
 
-func (s *ItemsUsecase) CreateItem(ctx context.Context, item *domain.Item, username string) (int64, error) {
+func (s *itemsUsecase) CreateItem(ctx context.Context, item *domain.Item, username string) (int64, error) {
 	if err := s.validate.Struct(item); err != nil {
 		s.logger.Error().Err(err).Msg("Validation failed")
 		return 0, fmt.Errorf("%w: %v", customErr.ErrInvalidInput, err)
@@ -45,7 +45,7 @@ func (s *ItemsUsecase) CreateItem(ctx context.Context, item *domain.Item, userna
 	return id, nil
 }
 
-func (s *ItemsUsecase) GetItems(ctx context.Context, limit, offset int, search string) ([]*domain.Item, int, error) {
+func (s *itemsUsecase) GetItems(ctx context.Context, limit, offset int, search string) ([]*domain.Item, int, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -62,7 +62,7 @@ func (s *ItemsUsecase) GetItems(ctx context.Context, limit, offset int, search s
 	return items, total, nil
 }
 
-func (s *ItemsUsecase) GetItemByID(ctx context.Context, id int64) (*domain.Item, error) {
+func (s *itemsUsecase) GetItemByID(ctx context.Context, id int64) (*domain.Item, error) {
 	if id <= 0 {
 		return nil, customErr.ErrInvalidInput
 	}
@@ -82,7 +82,7 @@ func (s *ItemsUsecase) GetItemByID(ctx context.Context, id int64) (*domain.Item,
 	return item, nil
 }
 
-func (s *ItemsUsecase) UpdateItem(ctx context.Context, id int64, item *domain.Item, username string) error {
+func (s *itemsUsecase) UpdateItem(ctx context.Context, id int64, item *domain.Item, username string) error {
 	if id <= 0 {
 		return customErr.ErrInvalidInput
 	}
@@ -106,7 +106,7 @@ func (s *ItemsUsecase) UpdateItem(ctx context.Context, id int64, item *domain.It
 	return nil
 }
 
-func (s *ItemsUsecase) DeleteItem(ctx context.Context, id int64, username string) error {
+func (s *itemsUsecase) DeleteItem(ctx context.Context, id int64, username string) error {
 	if id <= 0 {
 		return customErr.ErrInvalidInput
 	}
@@ -126,7 +126,7 @@ func (s *ItemsUsecase) DeleteItem(ctx context.Context, id int64, username string
 	return nil
 }
 
-func (s *ItemsUsecase) BulkDeleteItems(ctx context.Context, ids []int64, username string) error {
+func (s *itemsUsecase) BulkDeleteItems(ctx context.Context, ids []int64, username string) error {
 	s.logger.Info().Str("user", username).Msg("Bulk deleting items")
 	err := s.repo.BulkDeleteItems(ctx, ids, username)
 	if err != nil {

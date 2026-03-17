@@ -6,10 +6,10 @@ import (
 )
 
 type CreateItemRequest struct {
-	Name     string  `json:"name"`
-	SKU      string  `json:"sku"`
-	Quantity int     `json:"quantity"`
-	Price    float64 `json:"price"`
+	Name     string  `json:"name" binding:"required,min=1,max=255"`
+	SKU      string  `json:"sku" binding:"required,min=1,max=100"`
+	Quantity int     `json:"quantity" binding:"required,min=0"`
+	Price    float64 `json:"price" binding:"required,min=0"`
 	Category string  `json:"category"`
 	Location string  `json:"location"`
 }
@@ -17,8 +17,8 @@ type CreateItemRequest struct {
 type UpdateItemRequest struct {
 	Name     string   `json:"name,omitempty"`
 	SKU      string   `json:"sku,omitempty"`
-	Quantity *int     `json:"quantity,omitempty"`
-	Price    *float64 `json:"price,omitempty"`
+	Quantity *int     `json:"quantity,omitempty" binding:"omitempty,min=0"`
+	Price    *float64 `json:"price,omitempty" binding:"omitempty,min=0"`
 	Category string   `json:"category,omitempty"`
 	Location string   `json:"location,omitempty"`
 }

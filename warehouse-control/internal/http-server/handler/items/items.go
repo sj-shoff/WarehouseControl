@@ -15,11 +15,11 @@ import (
 )
 
 type ItemsHandler struct {
-	itemsUsecase itemsUsecase
+	itemsUsecase ItemsUsecase
 	logger       *zlog.Zerolog
 }
 
-func NewHandler(itemsUsecase itemsUsecase, logger *zlog.Zerolog) *ItemsHandler {
+func NewHandler(itemsUsecase ItemsUsecase, logger *zlog.Zerolog) *ItemsHandler {
 	return &ItemsHandler{
 		itemsUsecase: itemsUsecase,
 		logger:       logger,

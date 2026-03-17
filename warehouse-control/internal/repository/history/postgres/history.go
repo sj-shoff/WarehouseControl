@@ -141,3 +141,47 @@ func (r *HistoryPostgresRepository) GetHistoryByItemID(ctx context.Context, item
 	}
 	return records, nil
 }
+
+func (r *HistoryPostgresRepository) GetByID(ctx context.Context, id int64) (*domain.HistoryRecord, error) {
+	query := `
+        SELECT id, item_id, action, old_data, new_data, changed_by, changed_at
+        FROM items_history
+        WHERE id = $1
+    `
+
+	var rec domain.HistoryRecord
+	var oldDataRaw, newDataRaw []byte
+
+	row, err := r.db.QueryRowWithRetry(ctx, r.retries, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("%w: query record by id error: %v", customErr.ErrDatabase, err)
+	}
+
+	err = row.Scan(
+		&rec.ID,
+		&rec.ItemID,
+		&rec.Action,
+		&oldDataRaw,
+		&newDataRaw,
+		&rec.ChangedBy,
+		&rec.ChangedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("%w: scan history record by id: %v", customErr.ErrDatabase, err)
+	}
+
+	if len(oldDataRaw) > 0 {
+		if err := json.Unmarshal(oldDataRaw, &rec.OldData); err != nil {
+			return nil, fmt.Errorf("%w: unmarshal old_data error: %v", customErr.ErrDatabase, err)
+		}
+	}
+
+	if len(newDataRaw) > 0 {
+		if err := json.Unmarshal(newDataRaw, &rec.NewData); err != nil {
+			return nil, fmt.Errorf("%w: unmarshal new_data error: %v", customErr.ErrDatabase, err)
+		}
+	}
+
+	return &rec, nil
+}
