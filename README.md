@@ -3,8 +3,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791?style=flat&logo=postgresql)](https://www.postgresql.org/)
 
-**Warehouse Control System** — это система управления складским учётом с полным аудитом изменений и ролевой моделью доступа.  
-Сервис предоставляет HTTP API и встроенный SPA-фронтенд, а аутентификация делегируется отдельному SSO-сервису.
+**Warehouse Control System** — это система управления складским учётом с полным аудитом изменений и ролевой моделью доступа. Сервис предоставляет HTTP API и встроенный SPA-фронтенд, а аутентификация делегируется отдельному SSO-сервису.
 
 ---
 
