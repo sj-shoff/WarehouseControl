@@ -1,6 +1,3 @@
-// ============================================
-// STATE MANAGEMENT
-// ============================================
 const State = {
     token: localStorage.getItem('token') || '',
     refreshToken: localStorage.getItem('refresh_token') || '',
@@ -11,9 +8,6 @@ const State = {
     isBulkMode: false
 };
 
-// ============================================
-// HTTP CLIENT
-// ============================================
 const HttpClient = {
     async request(url, method = 'GET', body = null, headers = {}) {
         const loader = document.getElementById('global-loader');
@@ -78,9 +72,6 @@ const HttpClient = {
     }
 };
 
-// ============================================
-// AUTH MODULE
-// ============================================
 const Auth = {
     parseJwt(token) {
         try {
@@ -148,9 +139,6 @@ const Auth = {
     }
 };
 
-// ============================================
-// ROLE MODULE
-// ============================================
 const RoleModule = {
     init(role) {
         console.log(`Role module active: ${role}`);
@@ -278,9 +266,6 @@ const RoleModule = {
     }
 };
 
-// ============================================
-// APP MODULE
-// ============================================
 const App = {
     showItemModal() {
         const form = document.getElementById('item-form');
@@ -323,7 +308,6 @@ const App = {
         
         items.forEach(item => {
             const isSelected = State.selectedItems.has(item.id);
-            // ✅ ЗАЩИТА ОТ UNDEFINED (используем || 0)
             const quantity = item.quantity ?? 0;
             const price = item.price ?? 0;
             
@@ -375,18 +359,15 @@ const App = {
         }
     },
     
-    // ✅ ДОБАВЛЕНА ВАЛИДАЦИЯ ЦЕНЫ И КОЛИЧЕСТВА
     async saveItem(e) {
         e.preventDefault();
         
-        // Валидация количества
         const quantity = parseInt(document.getElementById('item-quantity').value) || 0;
         if (quantity < 0) {
             HttpClient.showToast('Количество не может быть отрицательным', 'error');
             return;
         }
         
-        // Валидация цены
         const price = parseFloat(document.getElementById('item-price').value) || 0;
         if (price < 0) {
             HttpClient.showToast('Цена не может быть отрицательной', 'error');
@@ -413,7 +394,6 @@ const App = {
                     State.currentItems[index] = response || { ...State.currentItems[index], ...payload };
                 }
             } else {
-                // ✅ ПРИ СОЗДАНИИ ИСПОЛЬЗУЕМ PAYLOAD ЕСЛИ RESPONSE НЕ ПОЛНЫЙ
                 const newItem = response && response.id 
                     ? { ...response, quantity: response.quantity ?? payload.quantity, price: response.price ?? payload.price }
                     : { ...payload, id: Date.now() };
@@ -754,7 +734,6 @@ const App = {
     async exportHistory() {
         const limit = document.getElementById('history-limit')?.value || '10000';
         
-        // ✅ ВАЛИДАЦИЯ ID ТОВАРА (не меньше 1)
         let itemId = document.getElementById('history-item-id')?.value || '';
         if (itemId && parseInt(itemId) < 1) {
             HttpClient.showToast('ID товара должен быть больше 0', 'error');
@@ -876,9 +855,6 @@ const App = {
     }
 };
 
-// ============================================
-// UI MODULE
-// ============================================
 const UI = {
     switchTab(index) {
         document.querySelectorAll('.tab').forEach((tab, i) => {
@@ -902,7 +878,4 @@ const UI = {
     closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 };
 
-// ============================================
-// INITIALIZATION
-// ============================================
 if (State.token) Auth.initApp();

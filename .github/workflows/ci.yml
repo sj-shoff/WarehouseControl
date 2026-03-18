@@ -2,9 +2,9 @@ name: Go CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   lint-and-test:
@@ -23,7 +23,7 @@ jobs:
         go-version: '1.24'
         cache-dependency-path: '${{ matrix.project }}/go.sum'
         
-    - name: Install golangci-lint
+    - name: Lint
       uses: golangci/golangci-lint-action@v7
       with:
         version: v2.8.0

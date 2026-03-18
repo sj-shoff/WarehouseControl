@@ -1,91 +1,343 @@
-# Система управления складом Warehouse Control
+# Warehouse Control System
 
-**Warehouse Control** — мини-система для управления инвентарем с полным CRUD, аудитом через PostgreSQL-триггеры, ролевым доступом и JWT-аутентификацией через отдельный SSO-сервис (gRPC).  
+Система управления складским учетом с полным аудитом изменений и ролевой моделью доступа. HTTP-сервер с встроенным SPA-фронтендом, использующий отдельный SSO-сервис для аутентификации.
 
-**Особенности:**
-- Refresh tokens (долгоживущие токены обновления)
-- Rate limiting (токен-бакет)
-- Graceful shutdown
-- Автоматическое обновление токена на фронтенде
-- История изменений через триггеры (образовательный антипаттерн)
+## Важное предупреждение
+
+Система зависит от сервиса SSO. Перед запуском Warehouse Control обязательно должен быть запущен и готов к работе сервис sso.
+
+- Перейдите в папку sso и выполните команды для запуска.
+
+- Убедитесь что порт 44044 доступен и логи показывают gRPC SSO server starting.
+
+- Только после этого запускайте Warehouse Control.
+
+Подробная инструкция по запуску SSO доступна в [sso/README.md](../sso/README.md).
+
+## Описание
+
+Система позволяет управлять номенклатурой товаров, отслеживать остатки и фиксировать каждое изменение данных. Ключевая особенность согласно техническому заданию — логирование истории изменений реализовано через триггеры PostgreSQL.
+
+Использование триггеров для бизнес-логики аудита считается антипаттерном в высоконагруженных системах из-за сложности отладки и скрытой логики, но реализовано здесь в учебных целях для демонстрации механизма работы.
+
+### Функциональные возможности
+
+- Полный CRUD товаров — создание, чтение, обновление, удаление индивидуальное и массовое.
+
+- Автоматическая запись в items_history при любом изменении таблицы items через триггер.
+
+- Визуальное сравнение старого и нового значения поля с подсветкой изменений.
+
+- Ролевая модель доступа — admin полный доступ и удаление и управление пользователями, manager создание и редактирование товаров, viewer только просмотр.
+
+- Экспорт истории изменений в CSV формат.
+
+- Поиск товаров по названию и SKU.
 
 ## Архитектура
 
-- **Warehouse Control** — REST API (Gin) + фронтенд (HTML/JS/Tailwind)
-- **SSO** — gRPC-сервис аутентификации
-- **БД** — PostgreSQL (отдельные БД: `warehouse_control` и `sso`)
-- **Фронтенд** — статический, обслуживается Warehouse
+### База данных
 
-## Функции
+Сервис использует две основные таблицы в PostgreSQL:
 
-- CRUD товаров (с ролевыми ограничениями)
-- Полная история изменений (INSERT/UPDATE/DELETE) с diff
-- Экспорт истории в CSV (с фильтрами)
-- Роли: **Admin** / **Manager** / **Viewer**
-- JWT + Refresh tokens
-- Rate limiting + Prometheus метрики
-- Авто-обновление токена на фронтенде
+- items — основные данные товаров. Содержит идентификатор, название, SKU уникальное значение, количество, цену, категорию, место хранения, время создания и время обновления.
 
-## Установка
+- items_history — таблица аудита заполняется триггером. Содержит идентификатор, идентификатор товара, действие INSERT или UPDATE или DELETE, старые данные в формате jsonb, новые данные в формате jsonb, имя пользователя выполнившего изменение, время изменения.
+
+### Логика триггера
+
+- При операциях INSERT, UPDATE, DELETE над таблицей items срабатывает функция log_item_changes.
+
+- Она считывает текущую сессионную переменную warehouse_control.changed_by которая устанавливается приложением перед транзакцией.
+
+- Снимки данных сохраняются через row_to_json в таблицу истории.
+
+- Это гарантирует запись истории даже если приложение упадет после коммита но до отправки ответа.
+
+### Веб-интерфейс
+
+Интерфейс реализован как Single Page Application на чистом JavaScript без сборщиков. Используется TailwindCSS через CDN для стилизации.
+
+- Вкладка Товары — таблица с сортировкой и поиском по Enter. Кнопки действий зависят от роли. Модальное окно для создания и редактирования. Индикация низкого остатка при quantity меньше 5.
+
+- Вкладка Аудит — фильтры по периоду, пользователю и типу действия. Кнопка Сравнить открывает модальное окно с diff. Кнопка Экспорт CSV скачивает файл на клиенте.
+
+- При старте приложение проверяет JWT и скрывает или показывает элементы управления в зависимости от роли.
+
+- При истечении токена автоматически пытается сделать refresh.
+
+## Конфигурация
+
+Файл .env должен находиться в папке warehouse-control.
+
+### Переменные окружения
+
+- SERVER_PORT — порт HTTP сервера. Значение по умолчанию 8037.
+
+- SERVER_READ_TIMEOUT — таймаут чтения запроса. Значение по умолчанию 30s.
+
+- SERVER_WRITE_TIMEOUT — таймаут записи ответа. Значение по умолчанию 30s.
+
+- SERVER_IDLE_TIMEOUT — таймаут неактивного соединения. Значение по умолчанию 60s.
+
+- SERVER_SHUTDOWN_TIMEOUT — таймаут корректного завершения. Значение по умолчанию 10s.
+
+- POSTGRES_HOST — хост базы данных склада. Для Docker используется warehouse-db.
+
+- POSTGRES_PORT — порт базы данных внутри контейнера. Значение 5432.
+
+- POSTGRES_EXTERNAL_PORT — порт базы данных для внешнего подключения. Используется для миграций. Значение 5432.
+
+- POSTGRES_USER — пользователь базы данных. Значение postgres.
+
+- POSTGRES_PASSWORD — пароль базы данных.
+
+- POSTGRES_DB_WAREHOUSE — имя базы данных склада. Значение warehouse_control.
+
+- POSTGRES_MAX_OPEN_CONNS — максимальное количество открытых соединений. Значение 10.
+
+- POSTGRES_MAX_IDLE_CONNS — максимальное количество неактивных соединений. Значение 5.
+
+- POSTGRES_CONN_MAX_LIFETIME — время жизни соединения. Значение 5m.
+
+- JWT_SECRET — секрет для проверки токенов. Должен совпадать с SSO.
+
+- JWT_EXP_HOURS — время жизни токена в часах. Значение 24.
+
+- SSO_GRPC_ADDR — адрес SSO сервиса. Для Docker sso:44044, для локально localhost:44044.
+
+- SSO_CLIENT_TIMEOUT — таймаут запросов к SSO. Значение 10s.
+
+- SSO_APP_NAME — имя приложения для SSO. Значение warehouse_control.
+
+- SSO_APP_ID — идентификатор приложения в SSO. Заполняется автоматически при bootstrap.
+
+- SSO_APP_SECRET — секрет приложения. Должен совпадать с настроенным в SSO.
+
+- INIT_ADMIN_USERNAME — логин админа для bootstrap SSO.
+
+- INIT_ADMIN_PASSWORD — пароль админа для bootstrap SSO.
+
+- RETRIES_ATTEMPTS — количество попыток при ошибке БД. Значение 3.
+
+- RETRIES_DELAY_MS — задержка между попытками в миллисекундах. Значение 100.
+
+- RETRIES_BACKOFF — множитель экспоненциальной задержки. Значение 1.5.
+
+- RATE_LIMIT_ENABLED — включение ограничителя запросов. Значение true.
+
+- RATE_LIMIT_RATE — количество запросов в секунду. Значение 5.
+
+- RATE_LIMIT_CAPACITY — ёмкость токенов. Значение 10.
+
+## Установка и запуск
 
 ### Требования
-- Go 1.24+
-- Docker + Docker Compose
-- Goose (для миграций)
 
-### 1. Клонирование и подготовка
-```bash
-git clone <repo>
-cd warehouse-control-project
-cp warehouse-control/.env.example warehouse-control/.env
-cp sso/.env.example sso/.env
+- Go версии 1.24 или выше для локальной разработки.
 
-2. Запуск через Docker (рекомендуется)
-Bash# Запуск Postgres + Redis (если нужен)
-cd infrastructure && make run   # если есть отдельный infra
+- Docker и Docker Compose для контейнеризированного запуска.
 
-# Запуск SSO
-cd sso && make run
+- Запущенный сервис SSO на порту 44044.
 
-# Запуск Warehouse
-cd warehouse-control && make run
-3. Миграции
-Bashcd sso && make migrate-up
-cd warehouse-control && make migrate-up
-4. Создание приложения и пользователей
-SQL-- В БД sso выполните:
-INSERT INTO apps (id, name, secret) 
-VALUES (1, 'warehouse', 'super_secret_jwt_key_change_in_production');
-Bash# Создание пользователей
-grpcurl -plaintext -d '{"username":"admin","password":"123","role":"admin","app_id":1}' localhost:44044 sso.Auth/Register
-grpcurl -plaintext -d '{"username":"manager","password":"123","role":"manager","app_id":1}' localhost:44044 sso.Auth/Register
-grpcurl -plaintext -d '{"username":"viewer","password":"123","role":"viewer","app_id":1}' localhost:44044 sso.Auth/Register
-Доступ
+### Пошаговый запуск
 
-Warehouse API + UI: http://localhost:8037
-SSO gRPC: localhost:44044
+- Первым запустите SSO — перейдите в папку sso и выполните make docker-up и make migrate-up.
 
-Эндпоинты API (Warehouse)
-Аутентификация
+- Скопируйте конфигурацию — выполните cp .env.example .env.
 
-POST /auth/login → {access_token, refresh_token, username, role, expires_at}
-POST /auth/refresh → {access_token, refresh_token}
+- Запустите сервис и базу данных командой make docker-up.
 
-Товары (требует access_token)
+- Примените миграции для создания таблиц и триггеров командой make migrate-up.
 
-GET /items?limit=10&offset=0&search=...
-POST /items (Manager/Admin)
-GET /items/:id
-PUT /items/:id (Manager/Admin)
-DELETE /items/:id (Manager/Admin)
-DELETE /items/bulk (только Admin)
+- Откройте браузер по адресу http://localhost:8037.
 
-История
+### Локальная разработка
 
-GET /history?item_id=...&action=...&username=...&date_from=...&date_to=...
-GET /history/item/:id
-GET /history/export (CSV с фильтрами)
+- Запустите базу данных через Docker на порту 5432.
 
-.env файлы
-warehouse-control/.env.example — см. выше в предыдущем сообщении.
-sso/.env.example — см. выше в предыдущем сообщении.
+- Убедитесь что SSO запущен на localhost:44044.
+
+- Обновите POSTGRES_HOST на localhost в .env.
+
+- Примените миграции командой make migrate-up.
+
+- Запустите сервер командой make run.
+
+### Сборка бинарного файла
+
+- Для создания исполняемого файла выполните make build.
+
+- Бинарный файл будет размещён в папке bin/warehouse-control.
+
+## HTTP API
+
+Все эндпоинты кроме логина требуют заголовок Authorization: Bearer токен.
+
+### Авторизация
+
+- POST /auth/login — проксирует запрос в SSO, возвращает JWT. Тело запроса: username, password.
+
+- POST /auth/refresh — обновляет токены через SSO. Тело запроса: refresh_token.
+
+- POST /auth/register — регистрация нового сотрудника. Требует роль admin. Тело запроса: username, password, role.
+
+### Товары
+
+- GET /items — список товаров. Параметры запроса: search, limit, offset.
+
+- POST /items — создание товара. Тело: name, sku, quantity, price, category, location.
+
+- GET /items/:id — данные конкретного товара.
+
+- PUT /items/:id — обновление товара. Тело: поля для обновления.
+
+- DELETE /items/:id — удаление товара. Требует роль admin или manager.
+
+- DELETE /items/bulk — массовое удаление. Тело: ids массив идентификаторов. Требует роль admin.
+
+### Аудит
+
+- GET /history — глобальная история. Параметры: item_id, action, username, date_from, date_to, limit.
+
+- GET /history/item/:id — история конкретного товара.
+
+- GET /history/diff/:id — детальное сравнение версий по ID записи истории. Response: массив полей со статусом ADDED, REMOVED, CHANGED.
+
+- GET /history/export — выгрузка CSV файла. Параметры те же что у history.
+
+### Примеры запросов
+
+Создание товара:
+
+- curl -X POST http://localhost:8037/items -H "Authorization: Bearer YOUR_TOKEN" -H "Content-Type: application/json" -d '{"name":"iPhone 16 Pro","sku":"APPL-IP16P-001","quantity":45,"price":124990.00,"category":"Смартфоны","location":"A-12-03"}'
+
+Получение истории товара:
+
+- curl http://localhost:8037/history/item/42 -H "Authorization: Bearer YOUR_TOKEN"
+
+Экспорт истории:
+
+- curl http://localhost:8037/history/export?limit=10000 -H "Authorization: Bearer YOUR_TOKEN" --output history.csv
+
+## Безопасность
+
+### Middleware
+
+- Каждый запрос проверяется на валидность JWT через AuthMiddleware.
+
+- При отсутствии или невалидности токена возвращается статус 401.
+
+### RBAC
+
+- Middleware RequireRole проверяет claim role перед доступом к защищенным ручкам.
+
+- Удаление доступно только admin, редактирование admin и manager, просмотр всем.
+
+### Rate Limit
+
+- Ограничение 5 запросов в секунду на IP адрес для защиты от brute-force.
+
+- При превышении возвращается статус 429 с заголовком retry_after.
+
+### Audit User
+
+- Имя пользователя передается в базу данных через set_config warehouse_control.changed_by внутри транзакции.
+
+- Триггер читает эту переменную и записывает в историю.
+
+### Валидация
+
+- Все входные данные валидируются через validator.
+
+- Проверяются обязательные поля, диапазоны значений, форматы строк.
+
+## Логирование
+
+Сервис использует zerolog для структурированного логирования.
+
+- Уровень INFO — успешные операции CRUD, запуск сервиса, завершение работы.
+
+- Уровень WARN — подозрительная активность, превышение rate limit, неверные токены.
+
+- Уровень ERROR — ошибки базы данных, сбои SSO, критические ошибки приложения.
+
+- Уровень DEBUG — детальная отладка, отключается в production.
+
+- Логи выводятся в консоль и доступны через команду make docker-logs.
+
+## Миграции
+
+Миграции управляются через goose. Файлы миграций находятся в папке migrations.
+
+- Команда make migrate-up применяет все новые миграции включая создание таблицы items, таблицы items_history и триггера log_item_changes.
+
+- Команда make migrate-down откатывает последнюю миграцию.
+
+## Troubleshooting
+
+### Ошибка sso bootstrap failed
+
+- SSO сервис не запущен или недоступен по адресу указанному в SSO_GRPC_ADDR.
+
+- Проверьте docker network ls. Оба сервиса должны быть в сети warehouse-net.
+
+- Проверьте SSO_APP_SECRET в .env warehouse и при инициализации SSO.
+
+### Ошибка relation items_history does not exist
+
+- Не применены миграции. Выполните make migrate-up.
+
+- Убедитесь что миграции запускаются для правильной базы данных warehouse_control а не sso.
+
+### Триггер не записывает changed_by
+
+- Убедитесь что в коде репозитория перед выполнением SQL-запроса вызывается setAuditUser который делает SELECT set_config warehouse_control.changed_by.
+
+- Проверьте что пользователь авторизован и claims извлекаются из контекста.
+
+### Интерфейс не загружается
+
+- Проверьте консоль браузера F12.
+
+- Убедитесь что статика отдаётся корректно путь static/templates/index.html.
+
+- Проверьте CORS если фронтенд и бэкенд на разных портах локально. В данной сборке статику отдает сам Go сервер.
+
+### Ошибка invalid token
+
+- Проверьте что JWT_SECRET совпадает в SSO и Warehouse Control.
+
+- Проверьте что время на сервере синхронизировано.
+
+## Makefile команды
+
+- make run — запуск сервиса локально. Требует запущенной базы данных и SSO.
+
+- make build — компиляция бинарного файла в bin/warehouse-control.
+
+- make docker-up — запуск сервиса и базы данных через Docker Compose.
+
+- make docker-down — остановка и удаление контейнеров.
+
+- make migrate-up — применение всех миграций базы данных.
+
+- make migrate-down — откат последней миграции.
+
+- make lint — запуск golangci-lint для проверки кода.
+
+- make docker-logs — просмотр логов всех контейнеров сервиса.
+
+## Взаимодействие с SSO
+
+- При старте приложение вызывает InitialBootstrap для регистрации в SSO.
+
+- Все запросы авторизации проксируются через gRPC клиент.
+
+- JWT токены проверяются локально через middleware с использованием общего JWT_SECRET.
+
+- При истечении access токена фронтенд автоматически вызывает /auth/refresh.
+
+## Лицензия
+
+MIT License.

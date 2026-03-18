@@ -137,7 +137,7 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 
 	records, err := h.historyUsecase.GetHistory(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.Error().Err(err).Msg("ExportHistoryCSV failed")
+		h.logger.Error().Err(err).Msg("ExportHistoryCSV: failed to get history")
 		h.writeError(c, err)
 		return
 	}
@@ -149,15 +149,30 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 
-	c.Writer.Write([]byte("\xef\xbb\xbf"))
+	if _, err := c.Writer.Write([]byte("\xef\xbb\xbf")); err != nil {
+		h.logger.Error().Err(err).Msg("failed to write BOM")
+		return
+	}
 
 	writer := csv.NewWriter(c.Writer)
 	writer.Comma = ';'
 	writer.UseCRLF = true
 	defer writer.Flush()
 
-	writer.Write([]string{"ОТЧЁТ ПО ИСТОРИИ ИЗМЕНЕНИЙ — Warehouse Control"})
-	writer.Write([]string{""})
+	write := func(row []string) bool {
+		if err := writer.Write(row); err != nil {
+			h.logger.Error().Err(err).Msg("CSV write error")
+			return false
+		}
+		return true
+	}
+
+	if !write([]string{"ОТЧЁТ ПО ИСТОРИИ ИЗМЕНЕНИЙ — Warehouse Control"}) {
+		return
+	}
+	if !write([]string{""}) {
+		return
+	}
 
 	period := "За всё время"
 	if filter.DateFrom != nil && filter.DateTo != nil {
@@ -165,24 +180,21 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 			filter.DateFrom.Format("02.01.2006"),
 			filter.DateTo.Format("02.01.2006"))
 	}
-	writer.Write([]string{period})
-	writer.Write([]string{""})
+	if !write([]string{period}) {
+		return
+	}
+	if !write([]string{""}) {
+		return
+	}
 
-	writer.Write([]string{
-		"ID записи",
-		"ID товара",
-		"Действие",
-		"Пользователь",
-		"Дата изменения",
-		"Старое название",
-		"Старый SKU",
-		"Старое кол-во",
-		"Старая цена",
-		"Новое название",
-		"Новый SKU",
-		"Новое кол-во",
-		"Новая цена",
-	})
+	header := []string{
+		"ID записи", "ID товара", "Действие", "Пользователь", "Дата изменения",
+		"Старое название", "Старый SKU", "Старое кол-во", "Старая цена",
+		"Новое название", "Новый SKU", "Новое кол-во", "Новая цена",
+	}
+	if !write(header) {
+		return
+	}
 
 	for _, rec := range records {
 		oldName, oldSKU, oldQty, oldPrice := "", "", "0", "0.00"
@@ -201,25 +213,27 @@ func (h *HistoryHandler) ExportHistoryCSV(c *gin.Context) {
 			newPrice = strconv.FormatFloat(rec.NewData.Price, 'f', 2, 64)
 		}
 
-		writer.Write([]string{
+		row := []string{
 			strconv.FormatInt(rec.ID, 10),
 			strconv.FormatInt(rec.ItemID, 10),
 			rec.Action,
 			rec.ChangedBy,
 			rec.ChangedAt.Format("02.01.2006 15:04:05"),
-			oldName,
-			oldSKU,
-			oldQty,
-			oldPrice,
-			newName,
-			newSKU,
-			newQty,
-			newPrice,
-		})
+			oldName, oldSKU, oldQty, oldPrice,
+			newName, newSKU, newQty, newPrice,
+		}
+
+		if !write(row) {
+			return
+		}
 	}
 
 	writer.Flush()
-	h.logger.Info().Int("records", len(records)).Msg("CSV comlete")
+	if err := writer.Error(); err != nil {
+		h.logger.Error().Err(err).Msg("CSV writer final error")
+	} else {
+		h.logger.Info().Int("records", len(records)).Msg("CSV export complete")
+	}
 }
 
 func (h *HistoryHandler) GetDiff(c *gin.Context) {

@@ -29,7 +29,7 @@ type Config struct {
 	}
 	JWT struct {
 		Secret   string        `env:"JWT_SECRET" validate:"required"`
-		TokenTTL time.Duration `env:"JWT_TOKEN_TTL" env-default:"24h"`
+		TokenTTL time.Duration `env:"JWT_EXP_HOURS" env-default:"24h"`
 	}
 	SSO struct {
 		GRPCAddr      string        `env:"SSO_GRPC_ADDR" validate:"required"`
